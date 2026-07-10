@@ -30,7 +30,19 @@ function Assert-Sha256 {
     [Parameter(Mandatory = $true)][string]$Expected
   )
 
-  $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $File).Hash.ToLowerInvariant()
+  # Use the .NET implementation directly instead of Get-FileHash so the
+  # bootstrap stays portable across Windows PowerShell and pwsh runners.
+  $sha256 = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $stream = [System.IO.File]::OpenRead($File)
+    try {
+      $actual = ([System.BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+    } finally {
+      $stream.Dispose()
+    }
+  } finally {
+    $sha256.Dispose()
+  }
   $normalizedExpected = $Expected.Trim().ToLowerInvariant()
   if ($actual -ne $normalizedExpected) {
     throw "Checksum mismatch for $File. Expected $normalizedExpected, received $actual."
