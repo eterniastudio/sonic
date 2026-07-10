@@ -41,6 +41,9 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
+      - name: Fetch and verify media sidecars
+        run: npm run tools:fetch
+
       - name: TypeScript check
         run: npm run check
 
