@@ -1,0 +1,32 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Reproducibly fetched third-party sidecars (run `npm run tools:fetch`)
+src-tauri/binaries/*.exe
+src-tauri/binaries/versions.json
+.cache/
+.playwright-cli/
+output/playwright/
+output/design-qa/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
