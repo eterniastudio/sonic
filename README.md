@@ -1,131 +1,177 @@
 # Sonic
 
-Sonic is a local-first YouTube beat downloader for producers. Paste a video URL, let Sonic read the BPM, key, tuning, and detune markers from the description, then save the audio in a format that is ready for a DAW.
+**Turn YouTube beat links into organized, DAW-ready audio-without relying on an online converter.**
+
+Sonic is a local-first desktop app built for producers. Paste a YouTube URL, analyze the musical metadata in the title and description, review the detected BPM, key, tuning, and detune, then export the audio in the format your session needs.
 
 [![CI](https://github.com/eterniastudio/sonic/actions/workflows/ci.yml/badge.svg)](https://github.com/eterniastudio/sonic/actions/workflows/ci.yml)
 [![Windows release](https://github.com/eterniastudio/sonic/actions/workflows/release.yml/badge.svg)](https://github.com/eterniastudio/sonic/actions/workflows/release.yml)
 [![Latest release](https://img.shields.io/github/v/release/eterniastudio/sonic?display_name=tag&sort=semver)](https://github.com/eterniastudio/sonic/releases/latest)
 
+[**Download the latest Windows release**](https://github.com/eterniastudio/sonic/releases/latest)
+
 ![Sonic analyzed workspace](docs/sonic-analyzed.png)
 
-## Why Sonic exists
+## Built for producer workflows
 
-Producer workflows should not depend on ad-filled converter sites. Sonic runs the downloader and media conversion tools locally, with the only network request being the source lookup against YouTube and its supporting endpoints.
+Sonic replaces ad-heavy converter sites with a focused desktop workflow:
 
-There are no accounts, subscriptions, browser extensions, analytics, or hosted conversion services in the app.
+- **Analyze before downloading.** Inspect the source and detected musical data first.
+- **Find useful metadata automatically.** Detect labelled BPM, musical key, detune, and tuning references.
+- **Verify every result.** See the exact title or description text that produced each match.
+- **Keep creative control.** Edit BPM, key, and detune before export.
+- **Export for the session.** Save the original audio stream or convert it to WAV, MP3, or M4A.
+- **Track the full job.** View progress, speed, ETA, conversion status, cancellation, and the final file location.
+- **Get cleaner filenames.** Generate producer-friendly names from the detected musical data.
+- **Work locally.** Download, conversion, filename generation, and metadata parsing run on your machine.
 
-## Features
+Sonic has no accounts, subscriptions, browser extensions, analytics, or hosted conversion service.
 
-- Inspect a YouTube video before downloading.
-- Extract labelled BPM values, including half-time alternatives such as 72 / 144 BPM.
-- Parse major, minor, modes, sharp/flat spellings, compact producer descriptions, and Camelot keys.
-- Detect detune written in cents, semitones, half-steps, or directional language.
-- Convert tuning references such as A=432Hz into a cents offset.
-- Show the exact description text that produced each detected value.
-- Edit BPM, key, and detune before exporting.
-- Download original audio or convert to WAV, MP3, or M4A.
-- Stream progress, speed, ETA, conversion status, cancellation, and final file location.
-- Generate producer-friendly filenames from the detected musical data.
-- Keep all conversion and metadata work on the local machine.
+## Download for Windows
 
-## Download
+Sonic currently targets **Windows 10/11 x64**.
 
-Download the latest Windows installer from [Eternia Studios releases](https://github.com/eterniastudio/sonic/releases/latest).
+Download the latest installer from the [GitHub Releases page](https://github.com/eterniastudio/sonic/releases/latest). Each release includes:
 
-The release page includes:
+- `Sonic_<version>_x64-setup.exe` - the Windows NSIS installer.
+- `SHA256SUMS.txt` - the SHA-256 checksum for installer verification.
 
-- Sonic version x64 setup.exe — the Windows NSIS installer.
-- SHA256SUMS.txt — the checksum for verifying the installer.
+The installer bundles yt-dlp, FFmpeg, ffprobe, and Deno. You do not need to install Node.js, Rust, Python, FFmpeg, or yt-dlp to use Sonic.
 
-The installer bundles yt-dlp, FFmpeg, ffprobe, and Deno. End users do not need Node.js, Rust, Python, FFmpeg, or yt-dlp installed globally.
+Sonic uses Microsoft WebView2. It is included with current Windows installations and can be installed through Microsoft's WebView2 bootstrapper when required.
 
-Sonic is currently Windows-first and targets Windows 10/11 x64. The app uses WebView2, which is included on current Windows installations and can be installed through Microsoft's WebView2 bootstrapper when needed.
+> **Windows SmartScreen:** Unsigned builds may display a warning. Choose **More info**, verify the download source and checksum, then select **Run anyway** only when you trust the file.
 
 ## Quick start
 
-1. Download the latest Sonic x64 setup installer from the releases page.
-2. Run the installer. Windows may show a SmartScreen warning because private builds are not code-signed.
-3. Open Sonic.
-4. Paste a YouTube video URL into the top bar and choose Analyze.
-5. Review or edit Tempo, Musical key, and Detune.
-6. Choose the output format and destination, then select Download.
+1. Download the latest x64 installer from the [Releases page](https://github.com/eterniastudio/sonic/releases/latest).
+2. Run the installer and open Sonic.
+3. Paste a YouTube video URL into the top bar.
+4. Select **Analyze**.
+5. Review or edit **Tempo**, **Musical key**, and **Detune**.
+6. Choose an output format and destination.
+7. Select **Download**.
 
-Use Sonic with media you are authorized to save. The app does not bypass private-video access, geographic restrictions, or account authentication.
+> Use Sonic only with media you are authorized to save. Sonic does not bypass private-video access, geographic restrictions, or account authentication.
 
-## Metadata extraction
+## Musical metadata detection
 
-Sonic checks the video title and description for producer-friendly markers.
+Sonic scans the video title and description for producer-friendly metadata. It rejects common false positives and shows the source evidence behind every detected value.
 
 ### BPM
 
-Recognized forms include:
+Recognized examples:
 
-~~~text
+```text
 BPM: 144
 144 BPM
 Tempo 144
 72 / 144 BPM
-~~~
+```
 
 Timestamps, years, bitrates, and unrelated numbers are rejected. When two labelled values form a half-time pair, Sonic keeps the alternate BPM visible instead of silently discarding it.
 
-### Key
+### Musical key
 
-Recognized forms include:
+Recognized examples:
 
-~~~text
+```text
 KEY: F# minor
 Key - F♯m
 Ab major
 C Dorian
 11A
-~~~
+```
 
-The parser normalizes common Unicode sharp and flat characters and maps supported keys to Camelot notation where possible.
+The parser supports major and minor keys, modes, compact producer notation, Unicode sharp and flat characters, and Camelot keys. Supported keys are mapped to Camelot notation where possible.
 
 ### Detune and tuning
 
-Recognized forms include:
+Recognized examples:
 
-~~~text
+```text
 Detuned -32 cents
 -31.8¢
 Down 1 semitone
 Tuning: A=432Hz
-~~~
+```
 
-Explicit cents are preferred. If a tuning frequency is present, Sonic calculates the equivalent cents offset relative to A440 and displays the source evidence.
+Explicit cent values take priority. Sonic also understands semitones, half-steps, directional language, and tuning references such as `A=432Hz`. When a tuning frequency is present, Sonic calculates its cent offset relative to A440.
 
-Conflicting labelled values are surfaced as warnings so the producer can make the final call.
+When labelled values conflict, Sonic surfaces a warning and leaves the final choice to you.
 
 ## Output formats
 
-| Format | Use it when |
+| Format | Best for |
 | --- | --- |
-| Original | You want the best available source stream without a conversion step. |
-| WAV | You want a straightforward file for a DAW session or sample workflow. |
-| MP3 | You need a compact, widely compatible file. |
-| M4A | You want efficient AAC audio with good quality per megabyte. |
+| **Original** | Keeping the best available source audio stream without an additional conversion step. |
+| **WAV** | DAW sessions, editing, and sample workflows that benefit from a straightforward DAW-compatible file. |
+| **MP3** | Compact files with broad playback compatibility. |
+| **M4A** | Efficient AAC audio with strong quality per megabyte. |
 
-Converting a source file to WAV does not increase its source quality; it only creates a convenient DAW-compatible container.
+> Converting a compressed source to WAV does not restore lost quality. It creates a convenient, DAW-compatible file from the available source.
 
 ## Privacy and security
 
-Sonic is designed to avoid the risks of public downloader websites.
+Sonic does not upload media to a third-party conversion service. It connects to YouTube to inspect and download the requested source; metadata parsing and media conversion happen locally.
 
-- yt-dlp, FFmpeg, ffprobe, and Deno run as bundled local sidecars.
-- The app disables user yt-dlp configuration files, plugins, remote components, self-updates, playlist expansion, and shell expansion.
-- Download paths and filenames are validated before they reach the local tools.
-- The app uses a dedicated Downloads/Sonic folder by default.
-- Active downloads can be cancelled and Windows process trees are cleaned up.
-- Release sidecars are fetched from their official upstream artifacts and checksum-verified by scripts/fetch-tools.ps1.
-- GitHub release installers include a SHA-256 checksum file.
+The app also applies the following safeguards:
 
-Sonic still connects to YouTube when you inspect or download a URL. It is local-first, not offline.
+- Runs yt-dlp, FFmpeg, ffprobe, and Deno as bundled local sidecars.
+- Disables user yt-dlp configuration files, plugins, remote components, self-updates, playlist expansion, and shell expansion.
+- Validates download paths and filenames before passing them to local tools.
+- Uses a dedicated `Downloads/Sonic` folder by default.
+- Supports cancellation and cleans up active Windows process trees.
+- Fetches release sidecars from official upstream artifacts and verifies their checksums through `scripts/fetch-tools.ps1`.
+- Publishes a SHA-256 checksum file with GitHub release installers.
+
+Sonic is **local-first**, not offline. A network connection is still required to inspect or download a YouTube source.
+
+## Current scope
+
+The current release supports:
+
+- One YouTube video at a time.
+- Audio download and conversion.
+- Windows 10/11 x64.
+- Manual review and editing of detected metadata.
+
+The following are intentionally out of scope:
+
+- Playlist downloads.
+- Authenticated browser cookies.
+- Private or account-gated videos.
+- Geographic-restriction bypassing.
+- Live-source downloads.
+- Video export.
+
+## Troubleshooting
+
+### The installer does not start
+
+Install or repair Microsoft WebView2, then run the installer again. If SmartScreen blocks an unsigned build, verify the downloaded checksum before choosing **More info** and **Run anyway**.
+
+### Sonic says the local engine is not ready
+
+One or more bundled sidecars may be missing or blocked by antivirus software. In a development checkout, run:
+
+```powershell
+npm run tools:fetch
+```
+
+Restart Sonic afterward. The startup status identifies whether yt-dlp, FFmpeg, ffprobe, and Deno are available.
+
+### Sonic did not find a BPM or key
+
+Not every title or description contains structured musical metadata. The fields remain editable, so you can enter the values manually. Open **How this was detected** to review any matches Sonic did find.
+
+### A live video cannot be downloaded
+
+Sonic intentionally rejects live sources. Wait until the stream has ended, then analyze the completed video.
 
 ## Architecture
 
-~~~text
+```text
 React + TypeScript UI
           |
           v
@@ -134,151 +180,130 @@ Tauri 2 commands and events
           +--> yt-dlp (metadata + source audio)
           +--> Deno (yt-dlp JavaScript challenge runtime)
           +--> FFmpeg / ffprobe (format conversion + progress)
-~~~
+```
 
-The desktop shell is Tauri 2. The frontend is React and Vite. The backend is Rust and owns URL validation, sidecar execution, cancellation, progress parsing, safe paths, and metadata extraction.
+The desktop shell is built with Tauri 2. The frontend uses React and Vite. The Rust backend owns URL validation, sidecar execution, cancellation, progress parsing, safe-path handling, and musical metadata extraction.
 
 ## Repository layout
 
-~~~text
+```text
 src/
   App.tsx              React workflow and native command wiring
   App.css              Sonic visual system and responsive layout
 src-tauri/
-  src/lib.rs           Tauri commands, download jobs, progress events
+  src/lib.rs           Tauri commands, download jobs, and progress events
   src/metadata.rs      BPM, key, detune, and tuning parser
-  binaries/             Locally fetched release sidecars (ignored)
-  icons/                App, installer, and platform icon assets
+  binaries/            Locally fetched release sidecars (ignored)
+  icons/               App, installer, and platform icon assets
 scripts/
   fetch-tools.ps1      Fetches and verifies local media tools
 .github/workflows/
   ci.yml               TypeScript, Rust, and frontend validation
   release.yml          Windows installer and GitHub release automation
-~~~
+```
 
-## Development setup
+## Development
 
 ### Requirements
 
 - Windows 10/11 x64
 - Node.js 22+
-- Rust stable with the x86_64-pc-windows-msvc target
+- Rust stable with the `x86_64-pc-windows-msvc` target
 - Microsoft C++ Build Tools
-- WebView2
+- Microsoft WebView2
 
-### Install and fetch sidecars
+### Install dependencies and fetch sidecars
 
-~~~powershell
+```powershell
 npm install
 npm run tools:fetch
-~~~
+```
 
-The fetch script downloads the pinned yt-dlp, FFmpeg/ffprobe, and Deno artifacts, verifies their published SHA-256 checksums, and places them under src-tauri/binaries.
+The fetch script downloads the pinned yt-dlp, FFmpeg/ffprobe, and Deno artifacts, verifies their published SHA-256 checksums, and places them in `src-tauri/binaries`.
 
 ### Run the desktop app
 
-~~~powershell
+```powershell
 npm run tauri dev
-~~~
+```
 
-The Vite-only preview is useful for UI work:
+For frontend-only UI work:
 
-~~~powershell
+```powershell
 npm run dev
-~~~
+```
 
 The browser preview uses a deterministic demo video and simulated progress. Real downloads require the Tauri desktop build.
 
-### Validation
+### Validate the project
 
-~~~powershell
+```powershell
 npm run check
 npm run build
 cargo fmt --manifest-path src-tauri/Cargo.toml --check
 cargo test --manifest-path src-tauri/Cargo.toml
 cargo check --manifest-path src-tauri/Cargo.toml
-~~~
+```
 
 ### Build a local installer
 
-~~~powershell
+```powershell
 npm run tools:fetch
 npm run tauri build
-~~~
+```
 
 The installer is written to:
 
-~~~text
+```text
 src-tauri/target/release/bundle/nsis/Sonic_<version>_x64-setup.exe
-~~~
+```
 
 ## Release automation
 
-GitHub Actions builds the Windows installer for users so they never need to assemble the project locally.
+GitHub Actions builds the Windows installer so end users do not need to assemble the project locally.
 
-### Pull requests and branch pushes
+### Continuous integration
 
-.github/workflows/ci.yml runs on pull requests and pushes to main or master. It validates:
+`.github/workflows/ci.yml` runs on pull requests and pushes to `main` or `master`. It validates:
 
-- TypeScript checks
-- Vite production build
-- Rust formatting
-- Rust unit tests
+- TypeScript checks.
+- The Vite production build.
+- Rust formatting.
+- Rust unit tests.
 
 ### Versioned releases
 
-.github/workflows/release.yml runs for tags matching v*.
+`.github/workflows/release.yml` runs for tags matching `v*`. The workflow:
 
-It:
-
-1. Creates a clean Windows runner.
+1. Starts from a clean Windows runner.
 2. Installs Node.js and Rust.
 3. Fetches and verifies the pinned media sidecars.
 4. Builds the Tauri NSIS installer.
-5. Generates SHA256SUMS.txt.
+5. Generates `SHA256SUMS.txt`.
 6. Uploads the installer artifact.
 7. Creates a GitHub Release with the installer and checksum attached.
 
-To publish a new release:
+To publish a release:
 
-~~~powershell
+```powershell
 git checkout main
 git pull
 
-# Update package.json, package-lock.json, src-tauri/Cargo.toml,
-# src-tauri/Cargo.lock, and src-tauri/tauri.conf.json to the same version.
+# Keep these files on the same version:
+# package.json
+# package-lock.json
+# src-tauri/Cargo.toml
+# src-tauri/Cargo.lock
+# src-tauri/tauri.conf.json
+
 git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json
 git commit -m "release: v0.1.2"
 git tag v0.1.2
 git push origin main --follow-tags
-~~~
+```
 
-The tag push is the release trigger. The repository's GitHub Actions permissions must allow contents: write for the release workflow.
-
-## Troubleshooting
-
-### The installer does not start
-
-Install or repair Microsoft WebView2, then retry the installer. If Windows blocks the unsigned private build, select More info and Run anyway.
-
-### Sonic says the local engine is not ready
-
-This usually means a sidecar is missing or blocked by antivirus software. For a development checkout, run:
-
-~~~powershell
-npm run tools:fetch
-~~~
-
-Then restart Sonic. The app's startup status shows which of yt-dlp, FFmpeg, ffprobe, and Deno are available.
-
-### No BPM or key was found
-
-Not every video description has structured musical metadata. Sonic leaves the fields editable so you can enter values manually. Open How this was detected to inspect the exact matches it did find.
-
-### A live video cannot be downloaded
-
-Sonic intentionally rejects live sources. Wait until the stream has ended and inspect the finished video again.
+Pushing the tag triggers the release. The repository's GitHub Actions permissions must allow `contents: write` for the release workflow.
 
 ## Project status
 
-Sonic is a focused private-use release from Eternia Studios. The current release supports one YouTube video at a time and audio export on Windows. Playlist downloads, authenticated browser cookies, and video export are intentionally out of scope for this build.
+Sonic is a focused, private-use Windows release from Eternia Studios. Its current scope is intentionally narrow: analyze one YouTube source, review its musical metadata, and export the audio locally in a producer-friendly format.
