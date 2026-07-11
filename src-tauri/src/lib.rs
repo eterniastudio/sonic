@@ -3,6 +3,7 @@ mod metadata;
 use std::{
     collections::HashMap,
     env, fs,
+    io::Read,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -12,6 +13,7 @@ use std::{
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_shell::{
     process::{Command as ShellCommand, CommandChild, CommandEvent},
@@ -22,6 +24,7 @@ use uuid::Uuid;
 
 const PROGRESS_EVENT: &str = "sonic://download-progress";
 const MAX_ERROR_LENGTH: usize = 4_000;
+const JOB_DIRECTORY_PREFIX: &str = ".sonic-job-";
 
 #[derive(Clone, Default)]
 struct DownloadManager {
@@ -31,16 +34,21 @@ struct DownloadManager {
 struct RunningJob {
     child: Mutex<Option<CommandChild>>,
     cancelled: AtomicBool,
+    working_directory: PathBuf,
     output_directory: PathBuf,
     file_stem: String,
 }
 
 impl DownloadManager {
     fn insert(&self, job_id: String, job: Arc<RunningJob>) -> Result<(), String> {
-        self.jobs
+        let mut jobs = self
+            .jobs
             .lock()
-            .map_err(|_| "The download manager is unavailable".to_string())?
-            .insert(job_id, job);
+            .map_err(|_| "The download manager is unavailable".to_string())?;
+        if !jobs.is_empty() {
+            return Err("Another download is already running".to_string());
+        }
+        jobs.insert(job_id, job);
         Ok(())
     }
 
@@ -64,7 +72,7 @@ impl DownloadManager {
         for job in jobs {
             job.cancelled.store(true, Ordering::Release);
             terminate_job(&job);
-            cleanup_job_files(&job.output_directory, &job.file_stem);
+            cleanup_job_directory(&job.working_directory, &job.output_directory);
         }
     }
 }
@@ -188,17 +196,16 @@ impl DownloadProgress {
 
 #[tauri::command]
 async fn check_dependencies(app: AppHandle) -> DependencyStatus {
-    let checks = [
-        ("yt-dlp", vec!["--version"]),
-        ("ffmpeg", vec!["-version"]),
-        ("ffprobe", vec!["-version"]),
-        ("deno", vec!["--version"]),
-    ];
+    let checks = [("python", vec!["--version"])];
 
-    let mut dependencies = Vec::with_capacity(checks.len());
+    let mut dependencies = Vec::with_capacity(checks.len() + 3);
+    dependencies.push(check_yt_dlp(&app).await);
     for (name, args) in checks {
         dependencies.push(check_sidecar(&app, name, &args).await);
     }
+    dependencies.push(check_media_tool(&app, "deno", &["--version"]));
+    dependencies.push(check_media_tool(&app, "ffmpeg", &["-version"]));
+    dependencies.push(check_media_tool(&app, "ffprobe", &["-version"]));
 
     DependencyStatus {
         ready: dependencies.iter().all(|dependency| dependency.available),
@@ -220,8 +227,119 @@ fn get_default_output_dir(app: AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn prepare_media_engine(app: AppHandle) -> Result<String, String> {
+    let manifest = runtime_resource_path(&app, "tool-manifest.json")?;
+    let installer = runtime_resource_path(&app, "install-media-engine.ps1")?;
+    let install_directory = media_engine_directory(&app)?;
+    let powershell = windows_powershell_path()?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        run_media_engine_installer(&powershell, &installer, &manifest, &install_directory)
+    })
+    .await
+    .map_err(|error| format!("Media engine setup task failed: {error}"))?
+}
+
+fn run_media_engine_installer(
+    powershell: &Path,
+    installer: &Path,
+    manifest: &Path,
+    install_directory: &Path,
+) -> Result<String, String> {
+    let mut command = std::process::Command::new(powershell);
+    command.args([
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+    ]);
+    command.arg(installer);
+    command.arg("-ManifestPath").arg(manifest);
+    command.arg("-InstallDirectory").arg(install_directory);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let output = command
+        .output()
+        .map_err(|error| format!("Could not start media engine setup: {error}"))?;
+    if !output.status.success() {
+        let stderr = limited_text(&String::from_utf8_lossy(&output.stderr));
+        return Err(if stderr.is_empty() {
+            format!("Media engine setup exited with status {}", output.status)
+        } else {
+            stderr
+        });
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn runtime_resource_path(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
+    if let Ok(resource_directory) = app.path().resource_dir() {
+        let bundled = resource_directory.join(name);
+        if bundled.is_file() {
+            return Ok(bundled);
+        }
+    }
+
+    if cfg!(debug_assertions) {
+        let development = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")))
+            .join("scripts")
+            .join(match name {
+                "tool-manifest.json" => "tool-manifest.json",
+                "install-media-engine.ps1" => "install-media-engine.ps1",
+                _ => name,
+            });
+        if development.is_file() {
+            return Ok(development);
+        }
+    }
+
+    Err(format!("A required Sonic resource is missing: {name}"))
+}
+
+fn media_engine_directory(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_local_data_dir()
+        .map(|directory| directory.join("media-engine"))
+        .map_err(|error| format!("Could not resolve Sonic's local media engine folder: {error}"))
+}
+
+#[cfg(windows)]
+fn windows_powershell_path() -> Result<PathBuf, String> {
+    let system_root = env::var_os("SystemRoot")
+        .ok_or_else(|| "Windows did not provide its system directory".to_string())?;
+    let powershell = PathBuf::from(system_root)
+        .join("System32")
+        .join("WindowsPowerShell")
+        .join("v1.0")
+        .join("powershell.exe");
+    if powershell.is_file() {
+        Ok(powershell)
+    } else {
+        Err(
+            "Windows PowerShell is unavailable, so Sonic could not prepare its media engine"
+                .to_string(),
+        )
+    }
+}
+
+#[cfg(not(windows))]
+fn windows_powershell_path() -> Result<PathBuf, String> {
+    Err("Automatic media engine setup is currently available on Windows only".to_string())
+}
+
+#[tauri::command]
 async fn inspect_video(app: AppHandle, url: String) -> Result<VideoInfo, String> {
     let url = validate_youtube_url(&url)?;
+    let js_runtime = bundled_js_runtime(&app)?;
     let args = vec![
         "--ignore-config".to_string(),
         "--no-playlist".to_string(),
@@ -229,7 +347,7 @@ async fn inspect_video(app: AppHandle, url: String) -> Result<VideoInfo, String>
         "--no-plugin-dirs".to_string(),
         "--no-remote-components".to_string(),
         "--js-runtimes".to_string(),
-        "deno".to_string(),
+        js_runtime,
         "--socket-timeout".to_string(),
         "20".to_string(),
         "--retries".to_string(),
@@ -241,11 +359,8 @@ async fn inspect_video(app: AppHandle, url: String) -> Result<VideoInfo, String>
         url.clone(),
     ];
 
-    let command = app
-        .shell()
-        .sidecar("yt-dlp")
-        .map_err(|error| format!("Could not start yt-dlp: {error}"))?;
-    let output = with_sidecar_path(command)
+    let command = yt_dlp_command(&app)?;
+    let output = command
         .args(args)
         .output()
         .await
@@ -297,8 +412,11 @@ async fn start_download(
     request: DownloadRequest,
 ) -> Result<DownloadStarted, String> {
     let url = validate_youtube_url(&request.url)?;
+    let js_runtime = bundled_js_runtime(&app)?;
+    let ffmpeg_directory = ffmpeg_directory(&app)?;
     let output_directory = prepare_output_directory(&request.output_directory)?;
     let job_id = Uuid::new_v4().to_string();
+    let working_directory = prepare_job_directory(&output_directory, &job_id)?;
     let requested_stem = request
         .file_name
         .as_deref()
@@ -316,7 +434,7 @@ async fn start_download(
         "--no-plugin-dirs".to_string(),
         "--no-remote-components".to_string(),
         "--js-runtimes".to_string(),
-        "deno".to_string(),
+        js_runtime,
         "--match-filter".to_string(),
         "!is_live".to_string(),
         "--socket-timeout".to_string(),
@@ -339,7 +457,7 @@ async fn start_download(
         "--windows-filenames".to_string(),
         "--no-overwrites".to_string(),
         "--paths".to_string(),
-        output_directory.to_string_lossy().into_owned(),
+        working_directory.to_string_lossy().into_owned(),
         "--output".to_string(),
         output_template,
         "--format".to_string(),
@@ -348,36 +466,41 @@ async fn start_download(
 
     match request.format {
         DownloadFormat::Original => {}
-        DownloadFormat::Wav => add_audio_conversion_args(&mut args, "wav"),
-        DownloadFormat::Mp3 => add_audio_conversion_args(&mut args, "mp3"),
-        DownloadFormat::M4a => add_audio_conversion_args(&mut args, "m4a"),
+        DownloadFormat::Wav => add_audio_conversion_args(&mut args, "wav", None),
+        DownloadFormat::Mp3 => add_audio_conversion_args(&mut args, "mp3", Some("320K")),
+        DownloadFormat::M4a => add_audio_conversion_args(&mut args, "m4a", None),
     }
 
-    if let Some(executable_directory) = ffmpeg_directory() {
-        args.push("--ffmpeg-location".to_string());
-        args.push(executable_directory.to_string_lossy().into_owned());
-    }
+    args.push("--ffmpeg-location".to_string());
+    args.push(ffmpeg_directory.to_string_lossy().into_owned());
     args.push("--".to_string());
     args.push(url);
 
-    let command = app
-        .shell()
-        .sidecar("yt-dlp")
-        .map_err(|error| format!("Could not start yt-dlp: {error}"))?;
-    let (receiver, child) = with_sidecar_path(command)
-        .args(args)
-        .spawn()
-        .map_err(|error| format!("Could not start the download: {error}"))?;
+    let command = match yt_dlp_command(&app) {
+        Ok(command) => command,
+        Err(error) => {
+            cleanup_job_directory(&working_directory, &output_directory);
+            return Err(format!("Could not start yt-dlp: {error}"));
+        }
+    };
+    let (receiver, child) = match command.args(args).spawn() {
+        Ok(process) => process,
+        Err(error) => {
+            cleanup_job_directory(&working_directory, &output_directory);
+            return Err(format!("Could not start the download: {error}"));
+        }
+    };
 
     let job = Arc::new(RunningJob {
         child: Mutex::new(Some(child)),
         cancelled: AtomicBool::new(false),
+        working_directory: working_directory.clone(),
         output_directory: output_directory.clone(),
         file_stem: file_stem.clone(),
     });
     if let Err(error) = manager.insert(job_id.clone(), job.clone()) {
         terminate_job(&job);
-        cleanup_job_files(&output_directory, &file_stem);
+        cleanup_job_directory(&working_directory, &output_directory);
         return Err(error);
     }
 
@@ -440,7 +563,11 @@ async fn check_sidecar(app: &AppHandle, name: &str, args: &[&str]) -> Dependency
         }
     };
 
-    match with_sidecar_path(command).args(args).output().await {
+    match with_restricted_child_environment(command)
+        .args(args)
+        .output()
+        .await
+    {
         Ok(output) if output.status.success() => {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -464,6 +591,44 @@ async fn check_sidecar(app: &AppHandle, name: &str, args: &[&str]) -> Dependency
         },
         Err(error) => DependencyInfo {
             name: name.to_string(),
+            available: false,
+            version: None,
+            error: Some(error.to_string()),
+        },
+    }
+}
+
+async fn check_yt_dlp(app: &AppHandle) -> DependencyInfo {
+    let command = match yt_dlp_command(app) {
+        Ok(command) => command,
+        Err(error) => {
+            return DependencyInfo {
+                name: "yt-dlp".to_string(),
+                available: false,
+                version: None,
+                error: Some(error),
+            };
+        }
+    };
+
+    match command.arg("--version").output().await {
+        Ok(output) if output.status.success() => DependencyInfo {
+            name: "yt-dlp".to_string(),
+            available: true,
+            version: String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .find(|line| !line.trim().is_empty())
+                .map(|line| line.trim().to_string()),
+            error: None,
+        },
+        Ok(output) => DependencyInfo {
+            name: "yt-dlp".to_string(),
+            available: false,
+            version: None,
+            error: Some(limited_text(&String::from_utf8_lossy(&output.stderr))),
+        },
+        Err(error) => DependencyInfo {
+            name: "yt-dlp".to_string(),
             available: false,
             version: None,
             error: Some(error.to_string()),
@@ -528,7 +693,7 @@ async fn monitor_download(
     manager.remove(&job_id);
 
     if job.cancelled.load(Ordering::Acquire) {
-        cleanup_job_files(&job.output_directory, &job.file_stem);
+        cleanup_job_directory(&job.working_directory, &job.output_directory);
         emit_progress(
             &app,
             DownloadProgress {
@@ -540,28 +705,39 @@ async fn monitor_download(
     }
 
     if exit_code == Some(0) {
-        let output_path = reported_output
+        let staged_output = reported_output
             .as_deref()
-            .and_then(|path| validated_output_path(path, &job.output_directory))
-            .or_else(|| find_output_file(&job.output_directory, &job.file_stem));
+            .and_then(|path| validated_output_path(path, &job.working_directory))
+            .or_else(|| find_output_file(&job.working_directory, &job.file_stem));
 
-        if let Some(output_path) = output_path {
-            emit_progress(
-                &app,
-                DownloadProgress {
-                    percent: Some(100.0),
-                    output_path: Some(output_path),
-                    message: Some("Download complete".to_string()),
-                    ..DownloadProgress::status(&job_id, "completed")
-                },
-            );
-            return;
+        if let Some(staged_output) = staged_output {
+            match finalize_job_output(
+                &staged_output,
+                &job.working_directory,
+                &job.output_directory,
+                &job.file_stem,
+            ) {
+                Ok(output_path) => {
+                    emit_progress(
+                        &app,
+                        DownloadProgress {
+                            percent: Some(100.0),
+                            output_path: Some(output_path),
+                            message: Some("Download complete".to_string()),
+                            ..DownloadProgress::status(&job_id, "completed")
+                        },
+                    );
+                    return;
+                }
+                Err(error) => last_error = Some(error),
+            }
+        } else {
+            last_error =
+                Some("yt-dlp finished, but Sonic could not find the output file".to_string());
         }
-
-        last_error = Some("yt-dlp finished, but Sonic could not find the output file".to_string());
     }
 
-    cleanup_job_files(&job.output_directory, &job.file_stem);
+    cleanup_job_directory(&job.working_directory, &job.output_directory);
     let error = last_error.unwrap_or_else(|| match exit_code {
         Some(code) => format!("yt-dlp exited with code {code}"),
         None => "The download process ended unexpectedly".to_string(),
@@ -576,27 +752,66 @@ async fn monitor_download(
     );
 }
 
-fn add_audio_conversion_args(args: &mut Vec<String>, format: &str) {
+fn add_audio_conversion_args(args: &mut Vec<String>, format: &str, quality: Option<&str>) {
     args.push("--extract-audio".to_string());
     args.push("--audio-format".to_string());
     args.push(format.to_string());
-    args.push("--audio-quality".to_string());
-    args.push("0".to_string());
-}
-
-fn with_sidecar_path(command: ShellCommand) -> ShellCommand {
-    let mut paths = sidecar_search_directories();
-    if let Some(current_path) = env::var_os("PATH") {
-        paths.extend(env::split_paths(&current_path));
-    }
-
-    match env::join_paths(paths) {
-        Ok(path) => command.env("PATH", path),
-        Err(_) => command,
+    if let Some(quality) = quality {
+        args.push("--audio-quality".to_string());
+        args.push(quality.to_string());
     }
 }
 
-fn sidecar_search_directories() -> Vec<PathBuf> {
+fn with_restricted_child_environment(command: ShellCommand) -> ShellCommand {
+    let mut command = command.env_clear();
+
+    for variable in [
+        "SystemRoot",
+        "TEMP",
+        "TMP",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+    ] {
+        if let Some(value) = env::var_os(variable) {
+            command = command.env(variable, value);
+        }
+    }
+
+    if let Some(system_root) = env::var_os("SystemRoot") {
+        command = command.env("PATH", PathBuf::from(system_root).join("System32"));
+    } else {
+        command = command.env("PATH", "");
+    }
+
+    command
+}
+
+fn yt_dlp_command(app: &AppHandle) -> Result<ShellCommand, String> {
+    let script = sidecar_data_path(app, "yt-dlp")
+        .ok_or_else(|| "The bundled yt-dlp package could not be found".to_string())?;
+    let command = app
+        .shell()
+        .sidecar("python")
+        .map_err(|error| format!("Could not start the bundled Python runtime: {error}"))?;
+    Ok(with_restricted_child_environment(command)
+        .args(["-I".to_string(), script.to_string_lossy().into_owned()]))
+}
+
+fn bundled_js_runtime(app: &AppHandle) -> Result<String, String> {
+    let path = media_tool_path(app, "deno")?;
+    Ok(format!("deno:{}", path.to_string_lossy()))
+}
+
+fn sidecar_data_path(app: &AppHandle, name: &str) -> Option<PathBuf> {
+    bundled_data_search_directories(app)
+        .into_iter()
+        .map(|directory| directory.join(name))
+        .find(|path| path.is_file())
+}
+
+fn bundled_data_search_directories(_app: &AppHandle) -> Vec<PathBuf> {
     let mut directories = Vec::with_capacity(2);
     if let Some(directory) = env::current_exe()
         .ok()
@@ -606,21 +821,159 @@ fn sidecar_search_directories() -> Vec<PathBuf> {
     }
 
     if cfg!(debug_assertions) {
-        let development_binaries = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries");
-        if !directories.contains(&development_binaries) {
-            directories.push(development_binaries);
+        let python_runtime = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("binaries")
+            .join("python-runtime");
+        if !directories.contains(&python_runtime) {
+            directories.push(python_runtime);
         }
     }
     directories
 }
 
-fn ffmpeg_directory() -> Option<PathBuf> {
-    let directories = sidecar_search_directories();
-    directories
-        .iter()
-        .find(|directory| directory.join(platform_executable_name("ffmpeg")).is_file())
-        .cloned()
-        .or_else(|| directories.into_iter().next())
+fn ffmpeg_directory(app: &AppHandle) -> Result<PathBuf, String> {
+    let ffmpeg = media_tool_path(app, "ffmpeg")?;
+    let ffprobe = media_tool_path(app, "ffprobe")?;
+    let directory = ffmpeg
+        .parent()
+        .ok_or_else(|| "The verified FFmpeg path has no parent directory".to_string())?
+        .to_path_buf();
+    if ffprobe.parent() != Some(directory.as_path()) {
+        return Err("The verified FFmpeg and ffprobe executables are not colocated".to_string());
+    }
+    Ok(directory)
+}
+
+fn check_media_tool(app: &AppHandle, name: &str, args: &[&str]) -> DependencyInfo {
+    let executable = match media_tool_path(app, name) {
+        Ok(executable) => executable,
+        Err(error) => {
+            return DependencyInfo {
+                name: name.to_string(),
+                available: false,
+                version: None,
+                error: Some(error),
+            };
+        }
+    };
+
+    let mut command = std::process::Command::new(&executable);
+    command.args(args).env_clear();
+    if let Some(directory) = executable.parent() {
+        command.env("PATH", directory);
+    }
+    if let Some(system_root) = env::var_os("SystemRoot") {
+        command.env("SystemRoot", system_root);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    match command.output() {
+        Ok(output) if output.status.success() => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            DependencyInfo {
+                name: name.to_string(),
+                available: true,
+                version: stdout
+                    .lines()
+                    .chain(stderr.lines())
+                    .find(|line| !line.trim().is_empty())
+                    .map(|line| line.trim().to_string()),
+                error: None,
+            }
+        }
+        Ok(output) => DependencyInfo {
+            name: name.to_string(),
+            available: false,
+            version: None,
+            error: Some(limited_text(&String::from_utf8_lossy(&output.stderr))),
+        },
+        Err(error) => DependencyInfo {
+            name: name.to_string(),
+            available: false,
+            version: None,
+            error: Some(error.to_string()),
+        },
+    }
+}
+
+fn media_tool_path(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
+    let expected_hash = expected_media_tool_hash(app, name)?;
+    let executable_name = platform_executable_name(name);
+    let mut directories = vec![media_engine_directory(app)?];
+    if cfg!(debug_assertions) {
+        directories.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries"));
+    }
+
+    for directory in directories {
+        let Ok(canonical_directory) = directory.canonicalize() else {
+            continue;
+        };
+        let candidate = directory.join(&executable_name);
+        let Ok(canonical_candidate) = candidate.canonicalize() else {
+            continue;
+        };
+        if canonical_candidate.parent() != Some(canonical_directory.as_path())
+            || !canonical_candidate.is_file()
+        {
+            continue;
+        }
+        let actual_hash = sha256_file(&canonical_candidate)
+            .map_err(|error| format!("Could not verify {name}: {error}"))?;
+        if actual_hash != expected_hash {
+            return Err(format!(
+                "The local {name} executable failed checksum validation"
+            ));
+        }
+        return Ok(canonical_candidate);
+    }
+
+    Err(format!(
+        "The verified local {name} executable is not installed"
+    ))
+}
+
+fn expected_media_tool_hash(app: &AppHandle, name: &str) -> Result<String, String> {
+    if name != "ffmpeg" && name != "ffprobe" && name != "deno" {
+        return Err(format!("No media-engine hash is configured for {name}"));
+    }
+    let manifest_path = runtime_resource_path(app, "tool-manifest.json")?;
+    let manifest = fs::read_to_string(&manifest_path)
+        .map_err(|error| format!("Could not read the media engine manifest: {error}"))?;
+    let manifest: serde_json::Value = serde_json::from_str(&manifest)
+        .map_err(|error| format!("Could not parse the media engine manifest: {error}"))?;
+    let pointer = if name == "deno" {
+        "/tools/deno/executable/sha256".to_string()
+    } else {
+        format!("/tools/ffmpeg/executables/{name}/sha256")
+    };
+    let hash = manifest
+        .pointer(&pointer)
+        .and_then(serde_json::Value::as_str)
+        .filter(|hash| {
+            hash.len() == 64 && hash.chars().all(|character| character.is_ascii_hexdigit())
+        })
+        .ok_or_else(|| format!("The media engine manifest has no valid hash for {name}"))?;
+    Ok(hash.to_ascii_lowercase())
+}
+
+fn sha256_file(path: &Path) -> std::io::Result<String> {
+    let mut file = fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 #[cfg(windows)]
@@ -695,6 +1048,29 @@ fn prepare_output_directory(input: &str) -> Result<PathBuf, String> {
         .map_err(|error| format!("Could not access the output folder: {error}"))?;
     if !canonical.is_dir() {
         return Err("The selected output path is not a folder".to_string());
+    }
+    Ok(canonical)
+}
+
+fn prepare_job_directory(output_directory: &Path, job_id: &str) -> Result<PathBuf, String> {
+    let path = output_directory.join(format!("{JOB_DIRECTORY_PREFIX}{job_id}"));
+    if path.exists() {
+        return Err("Could not create an isolated download workspace".to_string());
+    }
+    fs::create_dir(&path)
+        .map_err(|error| format!("Could not create an isolated download workspace: {error}"))?;
+    let canonical = match path.canonicalize() {
+        Ok(canonical) => canonical,
+        Err(error) => {
+            cleanup_job_directory(&path, output_directory);
+            return Err(format!(
+                "Could not access the isolated download workspace: {error}"
+            ));
+        }
+    };
+    if !canonical.starts_with(output_directory) {
+        cleanup_job_directory(&path, output_directory);
+        return Err("The isolated download workspace escaped the output folder".to_string());
     }
     Ok(canonical)
 }
@@ -996,16 +1372,128 @@ fn find_output_file(output_directory: &Path, file_stem: &str) -> Option<String> 
         .map(|path| path.to_string_lossy().into_owned())
 }
 
-fn cleanup_job_files(output_directory: &Path, file_stem: &str) {
-    let prefix = format!("{}.", file_stem.to_lowercase());
-    let Ok(entries) = fs::read_dir(output_directory) else {
+fn finalize_job_output(
+    staged_output: &str,
+    working_directory: &Path,
+    output_directory: &Path,
+    requested_stem: &str,
+) -> Result<String, String> {
+    let staged = PathBuf::from(staged_output)
+        .canonicalize()
+        .map_err(|error| format!("Could not validate the completed audio file: {error}"))?;
+    if !staged.is_file() || !staged.starts_with(working_directory) {
+        return Err("The completed audio file was outside its staging workspace".to_string());
+    }
+
+    let extension = staged
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
+        .filter(|extension| {
+            !extension.is_empty()
+                && extension.len() <= 8
+                && extension
+                    .chars()
+                    .all(|character| character.is_ascii_alphanumeric())
+        })
+        .ok_or_else(|| "The completed audio file had an invalid extension".to_string())?;
+    let mut final_stem = available_file_stem(output_directory, requested_stem);
+    let mut collision_count = 0_u16;
+    let destination = loop {
+        let candidate = output_directory.join(format!("{final_stem}.{extension}"));
+        match move_file_no_replace(&staged, &candidate) {
+            Ok(()) => break candidate,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                collision_count += 1;
+                if collision_count >= 10_000 {
+                    return Err("Could not choose an unused output filename".to_string());
+                }
+                final_stem = available_file_stem(output_directory, requested_stem);
+            }
+            Err(error) => {
+                return Err(format!(
+                    "Could not move the completed audio into place: {error}"
+                ));
+            }
+        }
+    };
+    let canonical = match destination.canonicalize() {
+        Ok(canonical) => canonical,
+        Err(error) => {
+            let _ = fs::remove_file(&destination);
+            return Err(format!("Could not validate the saved audio file: {error}"));
+        }
+    };
+    if !canonical.is_file() || !canonical.starts_with(output_directory) {
+        let _ = fs::remove_file(&destination);
+        return Err("The saved audio file escaped the selected output folder".to_string());
+    }
+    cleanup_job_directory(working_directory, output_directory);
+    Ok(canonical.to_string_lossy().into_owned())
+}
+
+#[cfg(windows)]
+fn move_file_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+
+    #[link(name = "Kernel32")]
+    unsafe extern "system" {
+        fn MoveFileExW(
+            existing_file_name: *const u16,
+            new_file_name: *const u16,
+            flags: u32,
+        ) -> i32;
+    }
+
+    let source = source
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let destination = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    // Omitting MOVEFILE_REPLACE_EXISTING makes publication fail atomically
+    // when another process has already created the destination.
+    let moved = unsafe { MoveFileExW(source.as_ptr(), destination.as_ptr(), 0) };
+    if moved == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(windows))]
+fn move_file_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    fs::hard_link(source, destination)?;
+    fs::remove_file(source)
+}
+
+fn cleanup_job_directory(path: &Path, output_directory: &Path) {
+    let is_job_directory = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with(JOB_DIRECTORY_PREFIX));
+    if !is_job_directory {
+        return;
+    }
+
+    let Ok(canonical_output) = output_directory.canonicalize() else {
         return;
     };
-    for entry in entries.filter_map(Result::ok) {
-        let name = entry.file_name().to_string_lossy().to_lowercase();
-        if name.starts_with(&prefix) && entry.path().is_file() {
-            let _ = fs::remove_file(entry.path());
-        }
+    let Ok(canonical_parent) = path.parent().unwrap_or(Path::new("")).canonicalize() else {
+        return;
+    };
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return;
+    };
+    if canonical_parent == canonical_output
+        && metadata.is_dir()
+        && !metadata.file_type().is_symlink()
+    {
+        let _ = fs::remove_dir_all(path);
     }
 }
 
@@ -1066,6 +1554,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             check_dependencies,
             get_default_output_dir,
+            prepare_media_engine,
             inspect_video,
             start_download,
             cancel_download
@@ -1134,5 +1623,115 @@ mod tests {
         assert_eq!(parse_human_bytes("2MB"), Some(2_000_000));
         assert_eq!(parse_eta("01:02"), Some(62));
         assert_eq!(parse_eta("01:01:01"), Some(3_661));
+    }
+
+    #[test]
+    fn applies_explicit_mp3_bitrate_without_claiming_m4a_reencoding() {
+        let mut mp3_args = Vec::new();
+        add_audio_conversion_args(&mut mp3_args, "mp3", Some("320K"));
+        assert_eq!(
+            mp3_args,
+            [
+                "--extract-audio",
+                "--audio-format",
+                "mp3",
+                "--audio-quality",
+                "320K"
+            ]
+        );
+
+        let mut wav_args = Vec::new();
+        add_audio_conversion_args(&mut wav_args, "wav", None);
+        assert_eq!(wav_args, ["--extract-audio", "--audio-format", "wav"]);
+
+        let mut m4a_args = Vec::new();
+        add_audio_conversion_args(&mut m4a_args, "m4a", None);
+        assert_eq!(m4a_args, ["--extract-audio", "--audio-format", "m4a"]);
+    }
+
+    #[test]
+    fn finalizes_from_a_job_staging_directory() {
+        let root = env::temp_dir().join(format!("sonic-output-test-{}", Uuid::new_v4()));
+        fs::create_dir(&root).expect("test output folder should be created");
+        let output_directory = root
+            .canonicalize()
+            .expect("test output folder should resolve");
+        let job_id = Uuid::new_v4().to_string();
+        let working_directory =
+            prepare_job_directory(&output_directory, &job_id).expect("job workspace should exist");
+        let staged = working_directory.join("Night Shift.mp3");
+        fs::write(&staged, b"audio").expect("staged audio should be written");
+
+        let finalized = finalize_job_output(
+            &staged.to_string_lossy(),
+            &working_directory,
+            &output_directory,
+            "Night Shift",
+        )
+        .expect("staged audio should be finalized");
+
+        assert!(Path::new(&finalized).is_file());
+        assert!(!working_directory.exists());
+        fs::remove_dir_all(&root).expect("test output folder should be removed");
+    }
+
+    #[test]
+    fn finalization_never_clobbers_an_existing_destination() {
+        let root = env::temp_dir().join(format!("sonic-collision-test-{}", Uuid::new_v4()));
+        fs::create_dir(&root).expect("test output folder should be created");
+        let output_directory = root
+            .canonicalize()
+            .expect("test output folder should resolve");
+        let existing = output_directory.join("Night Shift.mp3");
+        fs::write(&existing, b"keep me").expect("existing audio should be written");
+
+        let job_id = Uuid::new_v4().to_string();
+        let working_directory =
+            prepare_job_directory(&output_directory, &job_id).expect("job workspace should exist");
+        let staged = working_directory.join("Night Shift.mp3");
+        fs::write(&staged, b"new audio").expect("staged audio should be written");
+
+        let finalized = finalize_job_output(
+            &staged.to_string_lossy(),
+            &working_directory,
+            &output_directory,
+            "Night Shift",
+        )
+        .expect("staged audio should be finalized without overwriting");
+
+        assert_eq!(
+            fs::read(&existing).expect("existing audio should remain"),
+            b"keep me"
+        );
+        assert_eq!(
+            fs::read(&finalized).expect("new audio should be published"),
+            b"new audio"
+        );
+        assert_ne!(Path::new(&finalized), existing);
+        fs::remove_dir_all(&root).expect("test output folder should be removed");
+    }
+
+    #[test]
+    fn atomic_publish_rejects_an_existing_destination() {
+        let root = env::temp_dir().join(format!("sonic-atomic-move-test-{}", Uuid::new_v4()));
+        fs::create_dir(&root).expect("test folder should be created");
+        let source = root.join("source.mp3");
+        let destination = root.join("destination.mp3");
+        fs::write(&source, b"new audio").expect("source should be written");
+        fs::write(&destination, b"keep me").expect("destination should be written");
+
+        let error = move_file_no_replace(&source, &destination)
+            .expect_err("publishing over an existing destination must fail");
+
+        assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(
+            fs::read(&destination).expect("destination should remain"),
+            b"keep me"
+        );
+        assert_eq!(
+            fs::read(&source).expect("source should remain"),
+            b"new audio"
+        );
+        fs::remove_dir_all(&root).expect("test folder should be removed");
     }
 }

@@ -87,8 +87,8 @@ type AudioFormat = "original" | "wav" | "mp3" | "m4a";
 const FORMATS: Array<{ id: AudioFormat; label: string; detail: string; badge: string }> = [
   { id: "original", label: "Original", detail: "No conversion", badge: "Source quality" },
   { id: "wav", label: "WAV", detail: "Ready for any DAW", badge: "Studio workflow" },
-  { id: "mp3", label: "MP3", detail: "Small and universal", badge: "320 kbps" },
-  { id: "m4a", label: "M4A", detail: "Compact high quality", badge: "AAC audio" },
+  { id: "mp3", label: "MP3", detail: "320 kbps", badge: "Universal audio" },
+  { id: "m4a", label: "M4A", detail: "AAC · remux or convert", badge: "Compact audio" },
 ];
 
 const PENDING_JOB_ID = "__sonic_pending__";
@@ -98,10 +98,10 @@ const DEMO_VIDEO: VideoInfo = {
   id: "sonic-demo",
   title: "Night Shift - Industrial Type Beat",
   description: "BPM: 144\nKEY: F# minor\nTuning: A=432Hz",
-  thumbnailUrl: "https://i.ytimg.com/vi/BaW_jenozKc/hqdefault.jpg",
+  thumbnailUrl: "/demo-beat-cover.svg",
   durationSeconds: 173,
   uploader: "Late Night Audio",
-  webpageUrl: "https://www.youtube.com/watch?v=BaW_jenozKc",
+  webpageUrl: "https://www.youtube.com/watch?v=jNQXAC9IVRw",
   isLive: false,
   metadata: {
     bpm: 144,
@@ -142,6 +142,15 @@ function formatEta(seconds?: number) {
   return seconds >= 60 ? Math.floor(seconds / 60) + "m " + (seconds % 60) + "s" : seconds + "s";
 }
 
+function compactDependencyVersion(value?: string) {
+  if (!value) return "Unavailable";
+  return value
+    .replace(/^ff(?:mpeg|probe) version\s+/i, "")
+    .replace(/^deno\s+/i, "")
+    .replace(/^python\s+/i, "")
+    .split(/\s+/)[0];
+}
+
 function errorText(error: unknown) {
   if (typeof error === "string") return error;
   if (error instanceof Error) return error.message;
@@ -180,6 +189,7 @@ function parseOptionalRange(value: string, label: string, minimum: number, maxim
 function App() {
   const native = isTauri();
   const [dependencies, setDependencies] = useState<DependencyStatus | null>(null);
+  const [preparingEngine, setPreparingEngine] = useState(false);
   const [url, setUrl] = useState("");
   const [video, setVideo] = useState<VideoInfo | null>(null);
   const [outputDirectory, setOutputDirectory] = useState("");
@@ -223,7 +233,7 @@ function App() {
     if (!native) {
       setDependencies({
         ready: true,
-        dependencies: ["yt-dlp", "ffmpeg", "ffprobe", "deno"].map((name) => ({
+        dependencies: ["yt-dlp", "python", "ffmpeg", "ffprobe", "deno"].map((name) => ({
           name,
           available: true,
           version: "preview",
@@ -244,6 +254,20 @@ function App() {
       setDependencies({ ready: false, dependencies: [] });
     }
   }, [native]);
+
+  const prepareEngine = useCallback(async () => {
+    if (!native || preparingEngine) return;
+    setError(null);
+    setPreparingEngine(true);
+    try {
+      await invoke<string>("prepare_media_engine");
+      await refreshDependencies();
+    } catch (caught) {
+      setError(errorText(caught));
+    } finally {
+      setPreparingEngine(false);
+    }
+  }, [native, preparingEngine, refreshDependencies]);
 
   useEffect(() => {
     void refreshDependencies();
@@ -524,7 +548,7 @@ function App() {
         <button
           className="analyze-action"
           type="submit"
-          disabled={locked || dependencies?.ready !== true}
+          disabled={locked || preparingEngine || dependencies?.ready !== true}
         >
           {busy ? <CircleNotch className="spin" size={18} aria-hidden="true" /> : null}
           <span>{compact ? "Analyze" : busy ? "Reading video" : "Continue"}</span>
@@ -538,9 +562,12 @@ function App() {
   const availableDependencies = dependencies?.dependencies.filter((item) => item.available).length ?? 0;
   const dependencyTotal = dependencies?.dependencies.length ?? 0;
   const engineReady = dependencies?.ready === true;
+  const mediaEngineMissing = dependencies?.dependencies.some(
+    (dependency) => ["deno", "ffmpeg", "ffprobe"].includes(dependency.name) && !dependency.available,
+  ) ?? false;
   const selectedFormat = FORMATS.find((item) => item.id === format) ?? FORMATS[1];
   const confidence = video ? Math.round(video.metadata.confidence * 100) : 0;
-  const busy = phase === "inspecting" || phase === "downloading";
+  const busy = preparingEngine || phase === "inspecting" || phase === "downloading";
 
   return (
     <div className="app-shell" aria-busy={busy}>
@@ -553,14 +580,14 @@ function App() {
         <div className="header-import">{renderUrlEntry(true)}</div>
 
         <div className="engine-state" role="status" aria-live="polite">
-          <span className={"engine-dot" + (engineReady ? " is-ready" : "")} />
-          <span>{dependencies === null ? "Checking" : engineReady ? "Ready" : "Engine offline"}</span>
-          {!engineReady && dependencies !== null ? (
+          <span className={"engine-dot" + (engineReady ? " is-ready" : preparingEngine ? " is-preparing" : "")} />
+          <span>{preparingEngine ? "Preparing engine" : dependencies === null ? "Checking" : engineReady ? "Ready" : "Engine offline"}</span>
+          {!engineReady && dependencies !== null && !preparingEngine ? (
             <button
               type="button"
-              onClick={() => void refreshDependencies()}
-              aria-label="Check local engine again"
-              title="Check local engine again"
+              onClick={() => void (mediaEngineMissing ? prepareEngine() : refreshDependencies())}
+              aria-label={mediaEngineMissing ? "Set up the verified media engine" : "Check local engine again"}
+              title={mediaEngineMissing ? "Set up the verified media engine" : "Check local engine again"}
             >
               <ArrowClockwise size={16} aria-hidden="true" />
             </button>
@@ -582,8 +609,8 @@ function App() {
         {!video ? (
           <section className="empty-workbench" aria-live="polite">
             <span className="empty-status">
-              {phase === "inspecting" ? <CircleNotch className="spin" size={14} aria-hidden="true" /> : <i />}
-              {phase === "inspecting" ? "Analyzing video" : "Workspace empty"}
+              {phase === "inspecting" || preparingEngine ? <CircleNotch className="spin" size={14} aria-hidden="true" /> : <i />}
+              {preparingEngine ? "Preparing verified media engine" : phase === "inspecting" ? "Analyzing video" : "Workspace empty"}
             </span>
             <h1>{phase === "inspecting" ? "Reading video details" : "No beat loaded"}</h1>
             <p>
@@ -591,17 +618,37 @@ function App() {
                 ? "Checking the description for tempo, key, and tuning."
                 : "Paste a YouTube link in the bar above to start."}
             </p>
-            {!engineReady && dependencies !== null ? (
+            {!engineReady && dependencies !== null && !preparingEngine ? (
               <div className="engine-warning">
                 <Info size={17} aria-hidden="true" />
                 <div>
-                  <strong>Local engine needs attention</strong>
+                  <strong>{mediaEngineMissing ? "Media engine setup required" : "Local engine needs attention"}</strong>
                   <span>
-                    {availableDependencies} of {dependencyTotal || 4} bundled tools are available.
+                    {mediaEngineMissing
+                      ? "Download the pinned Deno and LGPL FFmpeg engine from GitHub (about 180 MiB). Sonic verifies every file before use."
+                      : `${availableDependencies} of ${dependencyTotal || 5} local tools are available.`}
                   </span>
                 </div>
-                <button type="button" onClick={() => void refreshDependencies()}>Try again</button>
+                <button
+                  type="button"
+                  onClick={() => void (mediaEngineMissing ? prepareEngine() : refreshDependencies())}
+                >
+                  {mediaEngineMissing ? "Set up engine" : "Try again"}
+                </button>
               </div>
+            ) : null}
+            {engineReady && dependencies ? (
+              <details className="engine-versions">
+                <summary>Engine versions</summary>
+                <dl>
+                  {dependencies.dependencies.map((dependency) => (
+                    <div key={dependency.name}>
+                      <dt>{dependency.name}</dt>
+                      <dd title={dependency.version}>{compactDependencyVersion(dependency.version)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
             ) : null}
           </section>
         ) : (
@@ -701,7 +748,11 @@ function App() {
               {video.metadata.warnings.length ? (
                 <div className="warning-note">
                   <Info size={17} weight="fill" aria-hidden="true" />
-                  <span>{video.metadata.warnings[0]}</span>
+                  <ul aria-label="Metadata warnings">
+                    {video.metadata.warnings.map((warning, index) => (
+                      <li key={warning + "-" + index}>{warning}</li>
+                    ))}
+                  </ul>
                 </div>
               ) : null}
 

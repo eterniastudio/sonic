@@ -1,0 +1,17 @@
+accepted = [
+  "Apache-2.0",
+  "MIT",
+  "BSD-3-Clause",
+  "Unicode-3.0",
+  "0BSD",
+  "CC0-1.0",
+  "MIT-0",
+  "Zlib",
+  "MPL-2.0",
+  "Unlicense",
+]
+targets = ["x86_64-pc-windows-msvc"]
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+workarounds = ["ring", "rustls"]
+private = { ignore = true }

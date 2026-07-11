@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="title description">
+  <title id="title">Abstract Sonic beat cover</title>
+  <desc id="description">A dark studio-inspired cover with a restrained red waveform.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#161616"/>
+      <stop offset="1" stop-color="#080808"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.74" cy="0.42" r="0.58">
+      <stop offset="0" stop-color="#ff2a2a" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#ff2a2a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#background)"/>
+  <rect width="1280" height="720" fill="url(#glow)"/>
+  <g fill="#242424">
+    <rect x="0" y="154" width="1280" height="1"/>
+    <rect x="0" y="359" width="1280" height="1"/>
+    <rect x="0" y="564" width="1280" height="1"/>
+  </g>
+  <g fill="#f1f1f1">
+    <rect x="130" y="338" width="22" height="44" rx="11"/>
+    <rect x="170" y="298" width="22" height="124" rx="11"/>
+    <rect x="210" y="246" width="22" height="228" rx="11"/>
+    <rect x="250" y="320" width="22" height="80" rx="11"/>
+  </g>
+  <g fill="#ff3030">
+    <rect x="330" y="274" width="22" height="172" rx="11"/>
+    <rect x="370" y="215" width="22" height="290" rx="11"/>
+    <rect x="410" y="306" width="22" height="108" rx="11"/>
+    <rect x="450" y="174" width="22" height="372" rx="11"/>
+    <rect x="490" y="258" width="22" height="204" rx="11"/>
+    <rect x="530" y="323" width="22" height="74" rx="11"/>
+  </g>
+  <path d="M640 360h510" stroke="#343434" stroke-width="2"/>
+  <circle cx="1110" cy="360" r="8" fill="#ff3030"/>
+</svg>

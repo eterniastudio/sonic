@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 2,
+  "targetTriple": "x86_64-pc-windows-msvc",
+  "tools": {
+    "ytDlp": {
+      "version": "2026.07.04",
+      "source": "yt-dlp/yt-dlp",
+      "releaseTag": "2026.07.04",
+      "sourceUrl": "https://github.com/yt-dlp/yt-dlp/tree/2026.07.04",
+      "distributionLicense": "Unlicense with bundled ISC and MIT components",
+      "delivery": "bundled",
+      "artifact": {
+        "name": "yt-dlp",
+        "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.07.04/yt-dlp",
+        "sha256": "495be29ff4d9d4e9be7eabdfef225221e5d5282e77f2f505abc6dca80349f3fd"
+      }
+    },
+    "python": {
+      "version": "3.13.14",
+      "source": "python/cpython",
+      "releaseTag": "v3.13.14",
+      "sourceUrl": "https://github.com/python/cpython/tree/v3.13.14",
+      "distributionLicense": "PSF-2.0 with bundled third-party notices",
+      "delivery": "bundled",
+      "artifact": {
+        "name": "python-3.13.14-embed-amd64.zip",
+        "url": "https://www.python.org/ftp/python/3.13.14/python-3.13.14-embed-amd64.zip",
+        "sha256": "90b4e5b9898b72d744650524bff92377c367f44bd5fbd09e3148656c080ad907"
+      },
+      "executable": {
+        "archivePath": "python.exe",
+        "sha256": "ef8f51028ac5329641985112f8efb1c2d4c47c86b8011ddf7e6fae21e2b4e5a1"
+      },
+      "license": {
+        "archivePath": "LICENSE.txt",
+        "sha256": "62bec384df47b0328307db41455ff6ea2559e5546b394ac69148561b21703120"
+      }
+    },
+    "ffmpeg": {
+      "version": "N-125365-g9a01c1cb6a-20260630",
+      "source": "BtbN/FFmpeg-Builds",
+      "releaseTag": "autobuild-2026-06-30-13-34",
+      "sourceUrl": "https://github.com/BtbN/FFmpeg-Builds/tree/autobuild-2026-06-30-13-34",
+      "ffmpegSourceUrl": "https://github.com/FFmpeg/FFmpeg/commit/9a01c1cb6a4cf87529fe9898b66ec55c5b032639",
+      "distributionLicense": "LGPL-3.0-or-later",
+      "delivery": "runtime-download",
+      "artifact": {
+        "name": "ffmpeg-N-125365-g9a01c1cb6a-win64-lgpl.zip",
+        "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-30-13-34/ffmpeg-N-125365-g9a01c1cb6a-win64-lgpl.zip",
+        "sha256": "75cb786fa14299eb1c1cacc2542a15c8da690e551ab41858383dc425c605b8ab"
+      },
+      "executables": {
+        "ffmpeg": {
+          "archivePath": "ffmpeg-N-125365-g9a01c1cb6a-win64-lgpl/bin/ffmpeg.exe",
+          "sha256": "b1ebb2a19864de271d8539cc15934ff31719d184d3cbbcdb50dd16d68aa5db64"
+        },
+        "ffprobe": {
+          "archivePath": "ffmpeg-N-125365-g9a01c1cb6a-win64-lgpl/bin/ffprobe.exe",
+          "sha256": "5036abe12ed18f9048921af6984afeb331de6715afeb30c6bf64194798a4ed02"
+        }
+      },
+      "license": {
+        "archivePath": "ffmpeg-N-125365-g9a01c1cb6a-win64-lgpl/LICENSE.txt",
+        "sha256": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768"
+      }
+    },
+    "deno": {
+      "version": "2.9.2",
+      "source": "denoland/deno",
+      "releaseTag": "v2.9.2",
+      "sourceUrl": "https://github.com/denoland/deno/tree/v2.9.2",
+      "distributionLicense": "MIT",
+      "delivery": "runtime-download",
+      "artifact": {
+        "name": "deno-x86_64-pc-windows-msvc.zip",
+        "url": "https://github.com/denoland/deno/releases/download/v2.9.2/deno-x86_64-pc-windows-msvc.zip",
+        "sha256": "5fe194d26ac5ef77fcc5288c2c438c7a0465f3b6180440ebf04092714bf2dcdf"
+      },
+      "executable": {
+        "archivePath": "deno.exe",
+        "sha256": "a5270c2bb75a2ec12fef53185730327267d9e9fe6be6a962c5d1d5a050f93c88"
+      }
+    }
+  }
+}
