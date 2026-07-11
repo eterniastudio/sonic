@@ -2,9 +2,9 @@
 
 Sonic is a local-first YouTube beat downloader for producers. Paste a video URL, let Sonic read the BPM, key, tuning, and detune markers from the description, then save the audio in a format that is ready for a DAW.
 
-[![CI](https://github.com/EterniaStudios/sonic/actions/workflows/ci.yml/badge.svg)](https://github.com/EterniaStudios/sonic/actions/workflows/ci.yml)
-[![Windows release](https://github.com/EterniaStudios/sonic/actions/workflows/release.yml/badge.svg)](https://github.com/EterniaStudios/sonic/actions/workflows/release.yml)
-[![Latest release](https://img.shields.io/github/v/release/EterniaStudios/sonic?display_name=tag&sort=semver)](https://github.com/EterniaStudios/sonic/releases/latest)
+[![CI](https://github.com/eterniastudio/sonic/actions/workflows/ci.yml/badge.svg)](https://github.com/eterniastudio/sonic/actions/workflows/ci.yml)
+[![Windows release](https://github.com/eterniastudio/sonic/actions/workflows/release.yml/badge.svg)](https://github.com/eterniastudio/sonic/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/eterniastudio/sonic?display_name=tag&sort=semver)](https://github.com/eterniastudio/sonic/releases/latest)
 
 ![Sonic analyzed workspace](docs/sonic-analyzed.png)
 
@@ -30,7 +30,7 @@ There are no accounts, subscriptions, browser extensions, analytics, or hosted c
 
 ## Download
 
-Download the latest Windows installer from [Eternia Studios releases](https://github.com/EterniaStudios/sonic/releases/latest).
+Download the latest Windows installer from [Eternia Studios releases](https://github.com/eterniastudio/sonic/releases/latest).
 
 The release page includes:
 
