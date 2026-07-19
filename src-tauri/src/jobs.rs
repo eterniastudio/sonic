@@ -17,8 +17,8 @@ use crate::{
     error::{invalid, AppError, AppResult},
     filesystem::{
         canonical_local_audio, canonical_output_directory, canonical_recorded_file,
-        prepare_workspace, preset_extension, publish_pair, read_publication_journal,
-        render_filename, safe_cleanup_workspace,
+        external_path_string, prepare_workspace, preset_extension, publish_pair,
+        read_publication_journal, render_filename, safe_cleanup_workspace,
     },
     models::{
         AppSettings, DownloadProgress, EnqueueItem, ExportPresetId, JobProgress, JobState,
@@ -45,18 +45,36 @@ impl AppState {
     pub fn initialize(app: &AppHandle) -> AppResult<Self> {
         let repository = Repository::open(app)?;
         let settings = repository.get_settings()?;
-        if settings.settings.default_output_directory.is_none() {
-            if let Ok(base) = app
-                .path()
-                .download_dir()
-                .or_else(|_| app.path().desktop_dir())
-            {
-                if let Ok(output) =
-                    canonical_output_directory(&base.join("Sonic").to_string_lossy())
-                {
+        match settings.settings.default_output_directory.as_deref() {
+            Some(path) => {
+                let repaired = canonical_output_directory(path)
+                    .and_then(|output| external_path_string(&output))
+                    .ok()
+                    .filter(|normalized| normalized != path);
+                if let Some(normalized) = repaired {
                     let _ = repository.update_settings(
                         SettingsPatch {
-                            default_output_directory: Some(output.to_string_lossy().into_owned()),
+                            default_output_directory: Some(normalized),
+                            ..Default::default()
+                        },
+                        settings.revision,
+                    );
+                }
+            }
+            None => {
+                let normalized = app
+                    .path()
+                    .download_dir()
+                    .or_else(|_| app.path().desktop_dir())
+                    .ok()
+                    .and_then(|base| {
+                        canonical_output_directory(&base.join("Sonic").to_string_lossy()).ok()
+                    })
+                    .and_then(|output| external_path_string(&output).ok());
+                if let Some(normalized) = normalized {
+                    let _ = repository.update_settings(
+                        SettingsPatch {
+                            default_output_directory: Some(normalized),
                             ..Default::default()
                         },
                         settings.revision,
@@ -963,8 +981,8 @@ fn library_item_from_sidecar(
         duration_ms: sidecar.output_audio.duration_ms,
         sample_rate_hz: sidecar.output_audio.sample_rate_hz,
         channels: sidecar.output_audio.channels,
-        audio_path: audio_path.to_string_lossy().into_owned(),
-        sidecar_path: sidecar_path.to_string_lossy().into_owned(),
+        audio_path: external_path_string(audio_path)?,
+        sidecar_path: external_path_string(sidecar_path)?,
         file_size_bytes: metadata.len(),
         sha256: sidecar.output_sha256.clone(),
         missing: false,
@@ -1178,6 +1196,26 @@ mod tests {
         value.inspection.source = value.source.clone();
         value.client_item_id = Some("bad client id".into());
         assert!(validate_enqueue_item(&value).is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn enqueue_accepts_a_selected_folder_after_it_was_canonicalized_and_stored() {
+        let requested = std::env::temp_dir()
+            .join(format!("sonic-enqueue-output-{}", Uuid::new_v4()))
+            .join("Downloads");
+        let canonical = canonical_output_directory(&requested.to_string_lossy()).unwrap();
+        let mut value = request();
+        value.output_directory = canonical.to_string_lossy().into_owned();
+
+        // Existing installations can contain Windows' canonical `\\?\` form.
+        assert!(validate_enqueue_item(&value).is_ok());
+
+        value.output_directory = external_path_string(&canonical).unwrap();
+
+        assert!(validate_enqueue_item(&value).is_ok());
+
+        fs::remove_dir_all(requested.parent().unwrap()).unwrap();
     }
 
     #[test]

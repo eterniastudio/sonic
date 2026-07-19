@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     error::{conflict, not_found, AppError, AppResult},
+    filesystem::external_path_string,
     models::{
         AppSettings, EnqueueItem, JobDetail, JobPage, JobProgress, JobQuery, JobState, LibraryItem,
         LibraryPage, LibraryQuery, QueueJob, QueueSnapshot, SettingsPatch, SettingsSnapshot,
@@ -448,6 +449,8 @@ impl Repository {
         sidecar_path: &Path,
     ) -> AppResult<QueueJob> {
         let now = now_ms();
+        let output_path = external_path_string(output_path)?;
+        let sidecar_path = external_path_string(sidecar_path)?;
         let changed = self.lock()?.execute(
             "UPDATE jobs SET state='completed',revision=revision+1,progress_json=?1,
              output_path=?2,sidecar_path=?3,error_code=NULL,error_message=NULL,
@@ -458,8 +461,8 @@ impl Repository {
                     message: Some("Export complete".into()),
                     ..Default::default()
                 })?,
-                output_path.to_string_lossy(),
-                sidecar_path.to_string_lossy(),
+                output_path,
+                sidecar_path,
                 now,
                 id
             ],

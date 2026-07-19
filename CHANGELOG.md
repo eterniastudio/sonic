@@ -6,7 +6,14 @@ changes that require migration notes.
 
 ## [Unreleased]
 
-- No unreleased changes yet.
+### Fixed
+
+- Fixed Windows output folders being saved with a `\\?\` canonical prefix and
+  then rejected when an export was queued. Existing affected folder settings
+  are repaired automatically at startup.
+- Store user-facing local source, completed export, sidecar, diagnostics, and
+  publication paths without Windows' internal verbatim namespace prefix while
+  continuing to reject raw device namespaces.
 
 ## [0.2.0] - 2026-07-18
 

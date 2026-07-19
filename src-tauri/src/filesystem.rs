@@ -36,8 +36,10 @@ pub struct PublicationJournal {
 
 pub fn canonical_output_directory(input: &str) -> AppResult<PathBuf> {
     let input = input.trim();
-    let path = PathBuf::from(input);
-    if input.is_empty() || !path.is_absolute() || is_windows_device_path(input) {
+    let normalized = normalize_windows_filesystem_path(input)
+        .ok_or_else(|| invalid("Choose a normal drive or network output folder"))?;
+    let path = PathBuf::from(&normalized);
+    if input.is_empty() || !path.is_absolute() {
         return Err(invalid("Choose an absolute output folder"));
     }
     fs::create_dir_all(&path).map_err(|error| {
@@ -54,10 +56,12 @@ pub fn canonical_output_directory(input: &str) -> AppResult<PathBuf> {
 
 pub fn canonical_local_audio(input: &str, max_bytes: u64) -> AppResult<PathBuf> {
     let input = input.trim();
-    if input.is_empty() || is_windows_device_path(input) {
+    let normalized = normalize_windows_filesystem_path(input)
+        .ok_or_else(|| invalid("Choose a supported local audio file"))?;
+    if input.is_empty() {
         return Err(invalid("Choose a supported local audio file"));
     }
-    let path = PathBuf::from(input);
+    let path = PathBuf::from(normalized);
     if !path.is_absolute() {
         return Err(invalid("The local media path must be absolute"));
     }
@@ -92,6 +96,14 @@ pub fn canonical_local_audio(input: &str, max_bytes: u64) -> AppResult<PathBuf> 
         )));
     }
     Ok(canonical)
+}
+
+/// Converts a canonical filesystem path into the stable form persisted in JSON/SQLite and sent
+/// to the renderer. Windows canonicalization adds a `\\?\` namespace prefix; that prefix is an
+/// internal API detail and cannot safely be fed back through Sonic's untrusted path boundary.
+pub fn external_path_string(path: &Path) -> AppResult<String> {
+    normalize_windows_filesystem_path(&path.to_string_lossy())
+        .ok_or_else(|| invalid("The filesystem path uses an unsupported Windows device namespace"))
 }
 
 pub fn canonical_recorded_file(path: &Path) -> AppResult<Option<PathBuf>> {
@@ -392,8 +404,8 @@ pub fn publish_pair(
         }
         let journal = PublicationJournal {
             job_id: job_id.to_string(),
-            audio_path: audio_destination.to_string_lossy().into_owned(),
-            sidecar_path: sidecar_destination.to_string_lossy().into_owned(),
+            audio_path: external_path_string(&audio_destination)?,
+            sidecar_path: external_path_string(&sidecar_destination)?,
             audio_sha256: audio_hash.clone(),
             sidecar_sha256: sidecar_hash.clone(),
         };
@@ -476,9 +488,25 @@ fn format_number(value: f64) -> String {
     }
 }
 
-fn is_windows_device_path(value: &str) -> bool {
-    let lowercase = value.to_ascii_lowercase();
-    lowercase.starts_with(r"\\.\") || lowercase.starts_with(r"\\?\")
+fn normalize_windows_filesystem_path(value: &str) -> Option<String> {
+    let comparable = value.replace('/', "\\").to_ascii_lowercase();
+    if comparable.starts_with(r"\\.\") {
+        return None;
+    }
+    if comparable.starts_with(r"\\?\unc\") {
+        let network_path = value.get(8..)?;
+        return (!network_path.is_empty()).then(|| format!(r"\\{network_path}"));
+    }
+    if comparable.starts_with(r"\\?\") {
+        let disk_path = value.get(4..)?;
+        let bytes = disk_path.as_bytes();
+        let is_absolute_drive = bytes.len() >= 3
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1] == b':'
+            && matches!(bytes[2], b'\\' | b'/');
+        return is_absolute_drive.then(|| disk_path.to_string());
+    }
+    Some(value.to_string())
 }
 
 #[cfg(windows)]
@@ -575,6 +603,48 @@ mod tests {
         )
         .unwrap();
         assert_eq!(preview.full_name, "Night Shift - wav-44.1-24.wav");
+    }
+
+    #[test]
+    fn normalizes_only_safe_windows_verbatim_paths() {
+        assert_eq!(
+            normalize_windows_filesystem_path(r"\\?\C:\Users\Producer\Downloads\Sonic"),
+            Some(r"C:\Users\Producer\Downloads\Sonic".into())
+        );
+        assert_eq!(
+            normalize_windows_filesystem_path(r"\\?\UNC\studio-nas\beats\Sonic"),
+            Some(r"\\studio-nas\beats\Sonic".into())
+        );
+        assert_eq!(
+            normalize_windows_filesystem_path(r"C:\Users\Producer\Downloads\Sonic"),
+            Some(r"C:\Users\Producer\Downloads\Sonic".into())
+        );
+        assert!(normalize_windows_filesystem_path(r"\\.\PhysicalDrive0").is_none());
+        assert!(normalize_windows_filesystem_path(
+            r"\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy1"
+        )
+        .is_none());
+        assert!(normalize_windows_filesystem_path(r"\\?\Volume{1234}\Sonic").is_none());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn selected_output_folder_survives_canonical_storage_round_trip() {
+        let requested = std::env::temp_dir()
+            .join(format!("sonic-output-roundtrip-{}", Uuid::new_v4()))
+            .join("Selected downloads");
+        let canonical = canonical_output_directory(&requested.to_string_lossy()).unwrap();
+        let stored = external_path_string(&canonical).unwrap();
+
+        assert!(Path::new(&stored).is_absolute());
+        assert!(!stored.starts_with(r"\\?\"));
+        assert_eq!(canonical_output_directory(&stored).unwrap(), canonical);
+        assert_eq!(
+            canonical_output_directory(&canonical.to_string_lossy()).unwrap(),
+            canonical
+        );
+
+        fs::remove_dir_all(requested.parent().unwrap()).unwrap();
     }
 
     #[test]

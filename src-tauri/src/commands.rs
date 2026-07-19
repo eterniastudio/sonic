@@ -6,7 +6,7 @@ use crate::{
     acquisition,
     error::{conflict, invalid, AppError, AppResult},
     filesystem::{
-        canonical_output_directory, canonical_recorded_file, render_filename,
+        canonical_output_directory, canonical_recorded_file, external_path_string, render_filename,
         safe_cleanup_workspace, sanitize_file_stem,
     },
     jobs::{emit_queue_snapshot, validate_enqueue_item, AppState},
@@ -308,11 +308,8 @@ pub fn update_settings(
         .as_deref()
         .filter(|value| !value.trim().is_empty())
     {
-        request.patch.default_output_directory = Some(
-            canonical_output_directory(path)?
-                .to_string_lossy()
-                .into_owned(),
-        );
+        request.patch.default_output_directory =
+            Some(external_path_string(&canonical_output_directory(path)?)?);
     }
     let settings = state
         .repository
@@ -389,7 +386,7 @@ pub async fn export_diagnostics(
                 file.sync_all()?;
                 let path = path.canonicalize()?;
                 return Ok(ExportedDiagnostics {
-                    path: path.to_string_lossy().into_owned(),
+                    path: external_path_string(&path)?,
                 });
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
@@ -425,20 +422,16 @@ fn get_default_output_dir_typed(app: &AppHandle, state: &AppState) -> AppResult<
         .settings
         .default_output_directory
     {
-        return Ok(canonical_output_directory(&path)?
-            .to_string_lossy()
-            .into_owned());
+        return external_path_string(&canonical_output_directory(&path)?);
     }
     let base = app
         .path()
         .download_dir()
         .or_else(|_| app.path().desktop_dir())
         .map_err(|error| AppError::Internal(format!("Could not locate Downloads: {error}")))?;
-    Ok(
-        canonical_output_directory(&base.join("Sonic").to_string_lossy())?
-            .to_string_lossy()
-            .into_owned(),
-    )
+    external_path_string(&canonical_output_directory(
+        &base.join("Sonic").to_string_lossy(),
+    )?)
 }
 
 #[tauri::command]

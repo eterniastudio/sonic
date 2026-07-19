@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     error::{invalid, AppError, AppResult},
-    filesystem::canonical_local_audio,
+    filesystem::{canonical_local_audio, external_path_string},
     metadata::{self, MusicMetadata},
     models::{AppSettings, AudioProperties, SourceInspection, SourceSpec},
     tools::{
@@ -224,7 +224,7 @@ pub fn inspect_local(
     let declared_metadata = metadata::parse_music_metadata(&filename, "");
     let embedded_metadata = metadata::parse_music_metadata(&title, &tag_text);
     let suggested_metadata = merge_metadata(&embedded_metadata, &declared_metadata);
-    let source_path = path.to_string_lossy().into_owned();
+    let source_path = external_path_string(&path)?;
     Ok(SourceInspection {
         id: Uuid::new_v4().to_string(),
         source: SourceSpec::LocalFile {
