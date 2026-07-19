@@ -388,7 +388,7 @@ export class BrowserPreviewBridge implements SonicBridge {
         totalBytes: 42_000_000,
         speedBytesPerSecond: job.status === "acquiring" ? 5_200_000 : undefined,
         etaSeconds: Math.max(0, Math.round((100 - percent) / 8)),
-        message: job.status === "transcoding" ? "Rendering output preset" : job.status === "tagging" ? "Writing metadata" : job.status === "publishing" ? "Publishing safely" : "Acquiring source audio",
+        message: job.status === "transcoding" ? "Converting audio" : job.status === "tagging" ? "Writing metadata" : job.status === "publishing" ? "Saving file" : "Downloading audio",
       };
       this.emitJob(job);
     }, 420);

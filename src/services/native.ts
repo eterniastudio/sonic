@@ -367,7 +367,7 @@ export class NativeBridge implements SonicBridge {
 
   async updateQueuedJob(jobId: string, patch: Partial<QueueItem>) {
     const current = { ...(await this.getJob(jobId)), ...patch };
-    if (!current.inspection) throw new Error("Sonic needs the source inspection before updating this job.");
+    if (!current.inspection) throw new Error("Wait for Sonic to finish checking this source.");
     try {
       return normalizeQueueItem(await invoke<unknown>("update_queued_job", {
         request: {
@@ -521,7 +521,7 @@ export class NativeBridge implements SonicBridge {
     const selected = await openDialog({
       multiple: true,
       directory: false,
-      title: "Import audio into Sonic",
+      title: "Choose audio files",
       filters: [{
         name: "Audio",
         extensions: ["wav", "mp3", "m4a", "flac", "opus", "ogg", "webm"],

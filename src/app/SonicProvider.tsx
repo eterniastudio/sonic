@@ -38,7 +38,7 @@ function errorMessage(error: unknown) {
   if (typeof error === "string") return error;
   if (error instanceof Error) return error.message;
   if (error && typeof error === "object" && "message" in error && typeof error.message === "string") return error.message;
-  return "Sonic hit an unexpected problem.";
+  return "Something went wrong. Try again.";
 }
 
 function sourceKey(source: SourceInput) {
@@ -159,7 +159,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
         && sources.findIndex((candidate) => sourceKey(candidate) === key) === index;
     });
     if (!unique.length) {
-      dispatch({ type: "announce", message: "Those sources are already in this session." });
+      dispatch({ type: "announce", message: "Already added." });
       return;
     }
     const settings = stateRef.current.settings;
@@ -204,7 +204,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
       }
     });
     if (!entries.length) {
-      setError("Paste one or more video links first.");
+      setError("Paste at least one YouTube link.");
       return;
     }
     if (invalid) {
@@ -430,15 +430,15 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     const item = stateRef.current.jobsById[itemId];
     if (!item?.inspection) return;
     if (!stateRef.current.diagnostics.engine.ready) {
-      setError("The verified media engine must be ready before Sonic can export audio.");
+      setError("Set up the media tools before exporting.");
       return;
     }
     if (!item.outputDirectory) {
-      setError("Choose an output folder before adding this item to the export queue.");
+      setError("Choose where to save this file.");
       return;
     }
     if (item.inspection.isLive) {
-      setError("Live sources cannot be exported until the stream has ended.");
+      setError("Wait until this stream ends before exporting it.");
       return;
     }
     try {
@@ -507,7 +507,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
       if (mode === "retain-library") {
         dispatch({
           type: "announce",
-          message: "That completed export stays in the session because it backs a Beat Library history record.",
+          message: "Remove this track from the Library before clearing it here.",
         });
         return;
       }
@@ -555,7 +555,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
       return;
     }
     const retainedMessage = retained
-      ? ` ${retained} completed ${retained === 1 ? "export remains" : "exports remain"} because ${retained === 1 ? "it backs" : "they back"} Beat Library history.`
+      ? ` ${retained} finished ${retained === 1 ? "track is" : "tracks are"} still linked to the Library.`
       : "";
     dispatch({
       type: "announce",
@@ -595,7 +595,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     if (!item?.nativeJobId || item.status !== "queued") return;
     try {
       dispatch({ type: "upsertItem", item: await bridge.updateQueuedJob(item.nativeJobId, item) });
-      dispatch({ type: "announce", message: "Queued export settings updated." });
+      dispatch({ type: "announce", message: "Queue changes saved." });
     } catch (error) {
       setError(error);
     }
@@ -690,7 +690,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     try {
       const asset = await bridge.preparePreview(item);
       if (asset) dispatch({ type: "playerReady", targetId: item.id, asset });
-      else dispatch({ type: "playerUnavailable", targetId: item.id, error: "A preview becomes available after Sonic has a validated local audio file." });
+      else dispatch({ type: "playerUnavailable", targetId: item.id, error: "Export this track before previewing it." });
     } catch (error) {
       dispatch({ type: "playerUnavailable", targetId: item.id, error: errorMessage(error) });
     }

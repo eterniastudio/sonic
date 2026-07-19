@@ -60,37 +60,37 @@ export function SettingsPage() {
             : updater.phase === "unavailable"
               ? "Desktop updates"
               : updater.phase === "error"
-                ? "Update check needs attention"
+                ? "Couldn’t check for updates"
                 : "Automatic updates";
 
   return (
     <main className="settings-page" aria-labelledby="settings-heading">
       <header className="page-heading settings-heading">
-        <div><span className="eyebrow">Workspace</span><h1 id="settings-heading">Settings</h1><p>Defaults, naming, safety limits, and the verified local engine.</p></div>
+        <div><span className="eyebrow">Preferences</span><h1 id="settings-heading">Settings</h1><p>Choose where files go and how Sonic exports them.</p></div>
         <button className="primary-action save-settings" type="button" disabled={saving} onClick={() => void save()}><FloppyDisk size={18} weight="bold" aria-hidden="true" />{saving ? "Saving…" : "Save changes"}</button>
       </header>
 
       <div className="settings-columns">
         <div className="settings-main">
           <section className="settings-section" aria-labelledby="general-settings">
-            <header><div><span className="eyebrow">General</span><h2 id="general-settings">Session defaults</h2></div><FolderOpen size={21} aria-hidden="true" /></header>
+            <header><div><span className="eyebrow">General</span><h2 id="general-settings">Export defaults</h2></div><FolderOpen size={21} aria-hidden="true" /></header>
             <button className="path-button" type="button" onClick={() => void chooseOutputDirectory()}>
               <FolderOpen size={17} aria-hidden="true" />
               <span><small>Default output folder</small><strong>{draft.defaultOutputDirectory ? shortPath(draft.defaultOutputDirectory, 68) : "Choose a folder"}</strong></span>
             </button>
             <div className="settings-field-grid">
               <label className="field"><span>Default export preset</span><select value={draft.defaultPresetId} onChange={(event) => update("defaultPresetId", event.target.value as SonicSettings["defaultPresetId"])}>{state.presets.map((preset) => <option value={preset.id} key={preset.id}>{preset.name}</option>)}</select></label>
-              <label className="field"><span>Queue concurrency</span><select value={draft.maxConcurrentJobs} onChange={(event) => update("maxConcurrentJobs", Number(event.target.value))}><option value={1}>1 export · safest</option><option value={2}>2 exports</option><option value={3}>3 exports</option></select></label>
+              <label className="field"><span>Exports at once</span><select value={draft.maxConcurrentJobs} onChange={(event) => update("maxConcurrentJobs", Number(event.target.value))}><option value={1}>1 · uses fewer resources</option><option value={2}>2 at a time</option><option value={3}>3 at a time</option></select></label>
             </div>
             <div className="settings-switches">
-              <label className="switch-field"><input type="checkbox" checked={draft.historyEnabled} onChange={(event) => update("historyEnabled", event.target.checked)} /><span><b>Keep local history</b><small>Add completed exports to the Beat Library</small></span></label>
-              <label className="switch-field"><input type="checkbox" checked={draft.writeEmbeddedTags} onChange={(event) => update("writeEmbeddedTags", event.target.checked)} /><span><b>Write embedded tags</b><small>Use supported BPM, key, and title fields</small></span></label>
-              <label className="switch-field"><input type="checkbox" checked={draft.includeSourcePathInSidecar} onChange={(event) => update("includeSourcePathInSidecar", event.target.checked)} /><span><b>Include source location in sidecar</b><small>Off by default for more private local records</small></span></label>
+              <label className="switch-field"><input type="checkbox" checked={draft.historyEnabled} onChange={(event) => update("historyEnabled", event.target.checked)} /><span><b>Save exports to Library</b><small>Keep a searchable record of finished tracks</small></span></label>
+              <label className="switch-field"><input type="checkbox" checked={draft.writeEmbeddedTags} onChange={(event) => update("writeEmbeddedTags", event.target.checked)} /><span><b>Embed metadata</b><small>Save title, artist, BPM, and key in supported files</small></span></label>
+              <label className="switch-field"><input type="checkbox" checked={draft.includeSourcePathInSidecar} onChange={(event) => update("includeSourcePathInSidecar", event.target.checked)} /><span><b>Save original path in sidecar</b><small>Off by default</small></span></label>
             </div>
           </section>
 
           <section className="settings-section" aria-labelledby="naming-settings">
-            <header><div><span className="eyebrow">Naming</span><h2 id="naming-settings">Filename template</h2></div><FloppyDisk size={21} aria-hidden="true" /></header>
+            <header><div><span className="eyebrow">Naming</span><h2 id="naming-settings">File names</h2></div><FloppyDisk size={21} aria-hidden="true" /></header>
             <label className="field"><span>Default template</span><textarea rows={3} value={draft.filenameTemplate} onChange={(event) => update("filenameTemplate", event.target.value)} /></label>
             <div className="template-presets">
               {draft.templates.map((template) => <button type="button" key={template.id} className={draft.filenameTemplate === template.template ? "is-selected" : ""} onClick={() => { update("filenameTemplate", template.template); update("defaultTemplateId", template.id); }}><strong>{template.name}</strong><small>{template.template}</small></button>)}
@@ -99,12 +99,12 @@ export function SettingsPage() {
           </section>
 
           <section className="settings-section" aria-labelledby="safety-settings">
-            <header><div><span className="eyebrow">Guardrails</span><h2 id="safety-settings">Intake limits</h2></div><ShieldCheck size={21} aria-hidden="true" /></header>
+            <header><div><span className="eyebrow">Limits</span><h2 id="safety-settings">Source limits</h2></div><ShieldCheck size={21} aria-hidden="true" /></header>
             <div className="settings-field-grid">
               <label className="field"><span>Maximum duration</span><span className="input-with-unit"><input type="number" min="1" max="360" value={draft.maxDurationMinutes} onChange={(event) => update("maxDurationMinutes", Number(event.target.value))} /><b>minutes</b></span></label>
               <label className="field"><span>Maximum input size</span><span className="input-with-unit"><input type="number" min="1" max="20" step="0.5" value={Math.round(draft.maxInputBytes / 107_374_182.4) / 10} onChange={(event) => update("maxInputBytes", Math.round(Number(event.target.value) * 1024 ** 3))} /><b>GB</b></span></label>
             </div>
-            <p className="settings-note">Sonic validates these limits before processing local media. Current maximum input is {formatBytes(draft.maxInputBytes)}.</p>
+            <p className="settings-note">Sonic skips any source over these limits. The current file-size limit is {formatBytes(draft.maxInputBytes)}.</p>
           </section>
         </div>
 
@@ -117,18 +117,18 @@ export function SettingsPage() {
             <div className="update-copy">
               <p>
                 {updater.phase === "available" || (updater.phase === "error" && updater.availableVersion)
-                  ? `Signed update ${updater.availableVersion} is available. Sonic verifies it before installation.`
+                  ? `${updater.availableVersion} is ready to install. Sonic has verified its signature.`
                   : updater.phase === "downloading"
                     ? `Downloaded ${formatBytes(updater.downloadedBytes)}${updater.totalBytes ? ` of ${formatBytes(updater.totalBytes)}` : ""}.`
                     : updater.phase === "installing"
-                      ? "Sonic will close, finish installation, and reopen on the new version."
+                      ? "Sonic will restart when the update is installed."
                       : updater.phase === "upToDate"
-                        ? `This installation is current at version ${state.diagnostics.appVersion}.`
+                        ? `You’re using the latest version: ${state.diagnostics.appVersion}.`
                         : updater.phase === "unavailable"
-                          ? "Update checks run inside the installed desktop app, not the browser preview."
+                          ? "Update checks are only available in the installed app."
                           : updater.phase === "checking"
-                            ? "Contacting Eternia Studios releases and validating update metadata."
-                            : "Sonic checks Eternia Studios releases shortly after startup. Installation always requires your confirmation."}
+                            ? "Checking GitHub for a signed update…"
+                            : "Sonic checks for updates after it starts. You choose when to install them."}
               </p>
               {updater.releaseNotes && updater.availableVersion ? <details><summary>What’s new in {updater.availableVersion}</summary><p>{updater.releaseNotes}</p></details> : null}
               {updater.phase === "downloading" || updater.phase === "installing" ? (
@@ -145,7 +145,7 @@ export function SettingsPage() {
           </section>
 
           <section className="settings-section engine-section" aria-labelledby="engine-settings">
-            <header><div><span className="eyebrow">Verified engine</span><h2 id="engine-settings">{engine.ready ? "Ready" : "Needs attention"}</h2></div>{engine.ready ? <Check className="status-good" size={22} weight="bold" aria-hidden="true" /> : <WarningCircle className="status-warning" size={22} weight="fill" aria-hidden="true" />}</header>
+            <header><div><span className="eyebrow">Media tools</span><h2 id="engine-settings">{engine.ready ? "Ready" : "Setup needed"}</h2></div>{engine.ready ? <Check className="status-good" size={22} weight="bold" aria-hidden="true" /> : <WarningCircle className="status-warning" size={22} weight="fill" aria-hidden="true" />}</header>
             <div className="dependency-list">
               {engine.dependencies.length ? engine.dependencies.map((dependency) => (
                 <div key={dependency.name}>
@@ -153,11 +153,11 @@ export function SettingsPage() {
                   <strong>{dependency.name}</strong>
                   <small title={dependency.version ?? dependency.error}>{dependency.version?.split(/\s+/)[0] ?? dependency.error ?? "Unavailable"}</small>
                 </div>
-              )) : <p>Engine details are not available yet.</p>}
+              )) : <p>No tool details available.</p>}
             </div>
             <div className="engine-actions">
-              {!engine.ready ? <button className="primary-action" type="button" onClick={() => void prepareEngine()}><HardDrives size={17} aria-hidden="true" /> Set up engine</button> : null}
-              <button type="button" onClick={() => void refreshDiagnostics()}><ArrowClockwise size={17} aria-hidden="true" /> Verify again</button>
+              {!engine.ready ? <button className="primary-action" type="button" onClick={() => void prepareEngine()}><HardDrives size={17} aria-hidden="true" /> Set up media tools</button> : null}
+              <button type="button" onClick={() => void refreshDiagnostics()}><ArrowClockwise size={17} aria-hidden="true" /> Check again</button>
             </div>
           </section>
 
@@ -174,7 +174,7 @@ export function SettingsPage() {
               {state.diagnostics.mediaEngineDirectory ? <div><dt>Engine path</dt><dd title={state.diagnostics.mediaEngineDirectory}>{shortPath(state.diagnostics.mediaEngineDirectory, 30)}</dd></div> : null}
             </dl>
             {state.diagnostics.recoveryWarnings?.length ? <div className="inline-alert"><WarningCircle size={17} weight="fill" aria-hidden="true" /><ul>{state.diagnostics.recoveryWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}
-            <button type="button" onClick={() => void exportDiagnostics()}><Bug size={17} aria-hidden="true" /> Export redacted report</button>
+            <button type="button" onClick={() => void exportDiagnostics()}><Bug size={17} aria-hidden="true" /> Save support report</button>
           </section>
         </aside>
       </div>

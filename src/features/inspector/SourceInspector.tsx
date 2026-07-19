@@ -26,7 +26,7 @@ function metadataSummary(metadata: { bpm?: number; key?: string; detuneCents?: n
     metadata.key ?? null,
     metadata.detuneCents ? `${metadata.detuneCents > 0 ? "+" : ""}${metadata.detuneCents}c` : null,
   ].filter(Boolean);
-  return values.length ? values.join(" · ") : "No musical tags found";
+  return values.length ? values.join(" · ") : "Nothing found";
 }
 
 export function SourceInspector() {
@@ -63,8 +63,8 @@ export function SourceInspector() {
     return (
       <aside className="inspector-panel inspector-empty" aria-label="Source inspector">
         <Waveform size={32} aria-hidden="true" />
-        <h2>Select a source</h2>
-        <p>Choose a session item to verify its musical details, naming, and export preset.</p>
+        <h2>Select a track</h2>
+        <p>Choose a track to edit its metadata and export settings.</p>
       </aside>
     );
   }
@@ -87,7 +87,7 @@ export function SourceInspector() {
           <div>
             <span>{inspection?.sourceLabel ?? (item.source.kind === "youtube" ? "YouTube" : "Local file")}</span>
             <h2 id="inspector-title">{inspection?.title ?? "Inspecting source"}</h2>
-            <p>{inspection?.creator ?? "Creator not declared"}</p>
+            <p>{inspection?.creator ?? "No artist listed"}</p>
           </div>
           <span className={`state-chip state-${item.status}`}>{statusLabel(item.status)}</span>
         </header>
@@ -98,21 +98,21 @@ export function SourceInspector() {
             {inspection.codec ? <span>{inspection.codec}</span> : null}
             {inspection.audio.sampleRateHz ? <span>{Math.round(inspection.audio.sampleRateHz / 100) / 10} kHz</span> : null}
             {inspection.fileSizeBytes ? <span>{formatBytes(inspection.fileSizeBytes)}</span> : null}
-            <span>{confidence}% suggested confidence</span>
+            <span>{confidence}% match confidence</span>
           </div>
         ) : null}
 
         {item.status === "inspecting" ? (
           <div className="inspector-loading" role="status">
             <CircleNotch className="spin" size={19} aria-hidden="true" />
-            <div><strong>Reading this source</strong><span>Tags, title, description, codec, and duration are being inspected.</span></div>
+            <div><strong>Checking the source</strong><span>Reading its title, description, tags, and audio details.</span></div>
           </div>
         ) : null}
 
         {item.error ? (
           <div className="inline-alert is-error" role="alert">
             <Info size={17} weight="fill" aria-hidden="true" />
-            <div><strong>{item.errorCode ?? "Sonic needs attention"}</strong><span>{item.error}</span></div>
+            <div><strong>{item.errorCode ?? "Couldn’t inspect this source"}</strong><span>{item.error}</span></div>
           </div>
         ) : null}
 
@@ -120,7 +120,7 @@ export function SourceInspector() {
           <>
             <section className="inspector-section" aria-labelledby="metadata-heading">
               <div className="section-title-row">
-                <div><span className="eyebrow">Final metadata</span><h3 id="metadata-heading">Musical identity</h3></div>
+                <div><span className="eyebrow">Metadata</span><h3 id="metadata-heading">Check the details</h3></div>
                 <button
                   className="reset-metadata"
                   type="button"
@@ -135,14 +135,14 @@ export function SourceInspector() {
                     camelot: inspection.suggestedMetadata.camelot,
                     tuningHz: inspection.suggestedMetadata.tuningHz,
                   })}
-                >Reset to suggested</button>
+                >Use suggestions</button>
               </div>
 
               <div className="metadata-provenance" aria-label="Metadata source comparison">
-                <div><span>Declared</span><strong>{metadataSummary(inspection.declaredMetadata)}</strong></div>
-                <div><span>Embedded</span><strong>{metadataSummary(inspection.embeddedMetadata)}</strong></div>
-                <div className="is-final"><span>Final</span><strong>{metadataSummary({ bpm: Number(item.metadata.bpm) || undefined, key: item.metadata.key || undefined, detuneCents: Number(item.metadata.detuneCents) || undefined })}</strong></div>
-                <b>{confidence}% suggested confidence</b>
+                <div><span>From description</span><strong>{metadataSummary(inspection.declaredMetadata)}</strong></div>
+                <div><span>In the file</span><strong>{metadataSummary(inspection.embeddedMetadata)}</strong></div>
+                <div className="is-final"><span>For export</span><strong>{metadataSummary({ bpm: Number(item.metadata.bpm) || undefined, key: item.metadata.key || undefined, detuneCents: Number(item.metadata.detuneCents) || undefined })}</strong></div>
+                <b>{confidence}% match confidence</b>
               </div>
 
               <div className="text-field-grid">
@@ -179,7 +179,7 @@ export function SourceInspector() {
 
               {inspection.suggestedMetadata.alternateBpms.length ? (
                 <div className="alternate-values">
-                  <span>Tempo alternatives</span>
+                  <span>Other BPM matches</span>
                   {inspection.suggestedMetadata.alternateBpms.map((bpm) => (
                     <button type="button" key={bpm} disabled={locked} onClick={() => updateMetadata(item.id, { bpm: bpm.toString() })}>{bpm} BPM</button>
                   ))}
@@ -187,7 +187,7 @@ export function SourceInspector() {
               ) : null}
               {item.metadata.bpm && Number.isFinite(Number(item.metadata.bpm)) ? (
                 <div className="alternate-values">
-                  <span>Tempo feel</span>
+                  <span>Try another tempo</span>
                   {Number(item.metadata.bpm) / 2 >= 20 ? <button type="button" disabled={locked} onClick={() => updateMetadata(item.id, { bpm: (Number(item.metadata.bpm) / 2).toString() })}>½ · {Number(item.metadata.bpm) / 2} BPM</button> : null}
                   {Number(item.metadata.bpm) * 2 <= 400 ? <button type="button" disabled={locked} onClick={() => updateMetadata(item.id, { bpm: (Number(item.metadata.bpm) * 2).toString() })}>2× · {Number(item.metadata.bpm) * 2} BPM</button> : null}
                 </div>
@@ -202,7 +202,7 @@ export function SourceInspector() {
 
               <details className="evidence-disclosure">
                 <summary>
-                  <span><strong>Detection evidence</strong><small>{inspection.suggestedMetadata.matches.length} source matches</small></span>
+                  <span><strong>Where these values came from</strong><small>{inspection.suggestedMetadata.matches.length} {inspection.suggestedMetadata.matches.length === 1 ? "match" : "matches"}</small></span>
                   <CaretDown size={16} aria-hidden="true" />
                 </summary>
                 <div className="evidence-table">
@@ -212,14 +212,14 @@ export function SourceInspector() {
                       <strong>{match.rawText}</strong>
                       <small>{match.source} · {Math.round(match.confidence * 100)}%</small>
                     </div>
-                  )) : <p>No labelled metadata was found. Your final values remain editable.</p>}
+                  )) : <p>No BPM, key, or tuning details were found. You can enter them above.</p>}
                 </div>
               </details>
             </section>
 
             <section className="inspector-section" aria-labelledby="output-heading">
               <div className="section-title-row">
-                <div><span className="eyebrow">Output</span><h3 id="output-heading">Export recipe</h3></div>
+                <div><span className="eyebrow">Output</span><h3 id="output-heading">Export settings</h3></div>
                 <span className="preset-badge">{selectedPreset?.badge}</span>
               </div>
 
@@ -249,7 +249,7 @@ export function SourceInspector() {
               <div className="option-grid">
                 <label className="switch-field">
                   <input type="checkbox" checked={item.writeEmbeddedTags} disabled={locked || originalOutput || !selectedPreset?.supportsEmbeddedTags} onChange={(event) => updateItem(item.id, { writeEmbeddedTags: event.target.checked })} />
-                  <span><b>Embed metadata</b><small>Write supported tags into the export</small></span>
+                  <span><b>Embed metadata</b><small>Save title, artist, BPM, and key in the file</small></span>
                 </label>
                 <label className="field normalize-field">
                   <span>Normalize loudness <small>optional</small></span>
@@ -281,13 +281,13 @@ export function SourceInspector() {
                 ))}
               </div>
               <div className="filename-preview">
-                <span>Filename preview</span>
-                <strong>{item.filenamePreview || "Sonic is preparing the filename…"}</strong>
+                <span>File name</span>
+                <strong>{item.filenamePreview || "Preparing file name…"}</strong>
               </div>
 
               <button className="path-button" type="button" disabled={locked} onClick={() => void chooseOutputDirectory(item.id)}>
                 <FolderOpen size={17} aria-hidden="true" />
-                <span><small>Destination</small><strong>{item.outputDirectory ? shortPath(item.outputDirectory, 56) : "Choose a folder"}</strong></span>
+                <span><small>Save to</small><strong>{item.outputDirectory ? shortPath(item.outputDirectory, 56) : "Choose a folder"}</strong></span>
                 <CaretDown size={14} aria-hidden="true" />
               </button>
             </section>
@@ -296,14 +296,14 @@ export function SourceInspector() {
               <button
                 type="button"
                 disabled={!previewAvailable}
-                title={previewAvailable ? "Load a validated local preview" : "YouTube previews become available from the Library after export"}
+                title={previewAvailable ? "Play this local file" : "Export this track before previewing it"}
                 onClick={() => void loadPreview(item)}
               >
                 <Play size={17} weight="fill" aria-hidden="true" />
-                {previewAvailable ? "Load preview" : "Preview after export"}
+                {previewAvailable ? "Play preview" : "Export to preview"}
               </button>
-              <button type="button" onClick={() => void openSource(item.source)}><ArrowSquareOut size={17} aria-hidden="true" /> Open source</button>
-              {!previewAvailable ? <small className="preview-help">Remote previews are available from Library after export.</small> : null}
+              <button type="button" onClick={() => void openSource(item.source)}><ArrowSquareOut size={17} aria-hidden="true" /> Open original</button>
+              {!previewAvailable ? <small className="preview-help">You can preview this track after exporting it.</small> : null}
             </section>
           </>
         ) : null}
@@ -312,15 +312,15 @@ export function SourceInspector() {
       <footer className="inspector-action">
         <div>
           <span>{statusLabel(item.status)}</span>
-          <strong>{item.progress.message ?? selectedPreset?.name ?? "Review export"}</strong>
+          <strong>{item.progress.message ?? selectedPreset?.name ?? "Check before exporting"}</strong>
         </div>
         {item.status === "review" ? (
           <button className="primary-action" type="button" onClick={() => void enqueueItem(item.id)} disabled={!item.outputDirectory || inspection?.isLive}>
-            <DownloadSimple size={19} weight="bold" aria-hidden="true" /> Queue export
+            <DownloadSimple size={19} weight="bold" aria-hidden="true" /> Add to queue
           </button>
         ) : item.status === "queued" ? (
           <button className="primary-action" type="button" onClick={() => void saveQueuedItem(item.id)}>
-            <FloppyDisk size={18} weight="bold" aria-hidden="true" /> Save queue changes
+            <FloppyDisk size={18} weight="bold" aria-hidden="true" /> Save changes
           </button>
         ) : ACTIVE_STATES.includes(item.status) ? (
           <button className="danger-action" type="button" onClick={() => void cancelItem(item.id)}>

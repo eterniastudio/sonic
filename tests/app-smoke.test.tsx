@@ -21,7 +21,7 @@ describe("Sonic application shell", () => {
 
     expect(await screen.findByRole("button", { name: /sonic session/i })).toBeInTheDocument();
     expect(screen.getByRole("main")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /engine/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^ready$/i })).toBeInTheDocument();
 
     const results = await axe.run(container, {
       rules: {
@@ -38,17 +38,17 @@ describe("Sonic application shell", () => {
     await user.click(await screen.findByRole("button", { name: /^settings$/i }));
 
     expect(screen.getByRole("heading", { name: /desktop updates/i })).toBeInTheDocument();
-    expect(screen.getByText(/update checks run inside the installed desktop app/i)).toBeInTheDocument();
+    expect(screen.getByText(/update checks are only available in the installed app/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /check now/i })).toBeDisabled();
   });
 
-  it("accepts a source URL and moves into the producer review workflow", async () => {
+  it("accepts a source URL and opens it for review", async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const input = await screen.findByRole("textbox", { name: /authorized media links/i });
+    const input = await screen.findByRole("textbox", { name: /youtube links/i });
     await user.type(input, "https://www.youtube.com/watch?v=fixtureABCD");
-    await user.click(screen.getByRole("button", { name: /^add$/i }));
+    await user.click(screen.getByRole("button", { name: /add links/i }));
 
     expect(await screen.findByRole("heading", { name: /night shift.*abcd/i }, { timeout: 3_000 }))
       .toBeInTheDocument();
@@ -114,9 +114,9 @@ describe("Sonic application shell", () => {
     render(<App />);
 
     await screen.findByText("In Library");
-    await user.click(screen.getByRole("button", { name: /clear removable finished items/i }));
+    await user.click(screen.getByRole("button", { name: /clear finished/i }));
 
-    expect(await screen.findByText(/1 completed export stays here/i)).toBeInTheDocument();
+    expect((await screen.findAllByText(/1 finished track is still linked to the Library/i)).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Archive.wav").length).toBeGreaterThan(0);
     expect(screen.queryByText("Cancelled.wav")).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
