@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sonic Rust third-party licenses</title>
+  <style>
+    body { max-width: 980px; margin: 40px auto; padding: 0 24px; color: #18181b; font: 15px/1.55 system-ui, sans-serif; }
+    h1, h2 { line-height: 1.2; }
+    section { border-top: 1px solid #d4d4d8; margin-top: 32px; padding-top: 20px; }
+    pre { overflow-wrap: anywhere; white-space: pre-wrap; background: #f4f4f5; padding: 16px; border-radius: 8px; }
+    code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+  </style>
+</head>
+<body>
+  <h1>Sonic Rust third-party licenses</h1>
+  <p>Generated from <code>src-tauri/Cargo.lock</code> for the Windows x64 runtime dependency graph.</p>
+  <p>Each crate entry links to the exact version page and downloadable source archive published by crates.io. These links are also the source-code availability notice for Covered Software distributed in executable form under the Mozilla Public License 2.0.</p>
+  {{#each licenses}}
+  <section id="{{id}}">
+    <h2>{{name}}</h2>
+    <p>Used by:</p>
+    <ul>
+      {{#each used_by}}
+      <li>
+        <code>{{crate.name}} {{crate.version}}</code>
+        — <a href="https://crates.io/crates/{{crate.name}}/{{crate.version}}">exact package record</a>
+        · <a href="https://crates.io/api/v1/crates/{{crate.name}}/{{crate.version}}/download">exact source archive</a>
+        {{#if crate.repository}}· <a href="{{crate.repository}}">upstream repository</a>{{/if}}
+      </li>
+      {{/each}}
+    </ul>
+    <pre>{{text}}</pre>
+  </section>
+  {{/each}}
+</body>
+</html>

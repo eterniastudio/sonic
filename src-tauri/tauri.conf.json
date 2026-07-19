@@ -1,44 +1,62 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Sonic",
-  "version": "0.1.3",
-  "identifier": "com.sonic.desktop",
+  "version": "0.2.0",
+  "identifier": "studio.eternia.sonic",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run release:prepare",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
         "label": "main",
-        "title": "Sonic - Beat Intake",
-        "width": 1180,
-        "height": 760,
-        "minWidth": 900,
-        "minHeight": 650,
+        "title": "Sonic - Producer Workstation",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 960,
+        "minHeight": 680,
         "center": true,
         "resizable": true
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data: https://i.ytimg.com https://*.ytimg.com https://yt3.ggpht.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:"
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data: https://i.ytimg.com https://*.ytimg.com https://yt3.ggpht.com; media-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; font-src 'self' data:",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPCACHE/previews/**"]
+      }
     }
   },
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
     "publisher": "Eternia Studios",
-    "copyright": "Copyright © 2026 Eternia Studios",
-    "externalBin": [
-      "binaries/yt-dlp",
-      "binaries/ffmpeg",
-      "binaries/ffprobe",
-      "binaries/deno"
-    ],
-    "shortDescription": "A private beat downloader and metadata analyzer.",
-    "longDescription": "Sonic downloads authorized beat references locally and extracts BPM, musical key, and tuning metadata for producers.",
+    "copyright": "Copyright (c) 2026 Eternia Studios",
+    "homepage": "https://github.com/eterniastudio/sonic",
+    "licenseFile": "../LICENSE",
+    "externalBin": ["binaries/python-runtime/python"],
+    "resources": {
+      "../LICENSE": "LICENSE",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
+      "../docs/ffmpeg-build-configuration.txt": "ffmpeg-build-configuration.txt",
+      "../licenses/": "licenses/",
+      "../artifacts/licenses/": "licenses/generated/",
+      "../scripts/tool-manifest.json": "tool-manifest.json",
+      "../scripts/install-media-engine.ps1": "install-media-engine.ps1",
+      "binaries/python-runtime/*.dll": "",
+      "binaries/python-runtime/*.pyd": "",
+      "binaries/python-runtime/*.zip": "",
+      "binaries/python-runtime/*.cat": "",
+      "binaries/python-runtime/*._pth": "",
+      "binaries/python-runtime/yt-dlp": "yt-dlp",
+      "binaries/versions.json": "versions.json"
+    },
+    "shortDescription": "A local-first producer intake and export workstation.",
+    "longDescription": "Sonic organizes authorized media and local audio into a producer-ready queue with editable BPM, musical key, tuning metadata, export recipes, and a searchable local library.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -48,8 +66,20 @@
     ],
     "windows": {
       "nsis": {
+        "installerHooks": "windows/installer-hooks.nsh",
         "installerIcon": "icons/icon.ico",
         "uninstallerIcon": "icons/icon.ico"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZDNjREMkExNjUyRTU0MTEKUldRUlZDNWxvZEprL0g2RHJHcE92UmRMWFZnb1dmRytXZGFROVJwVlZYamVEZFB6blRoQjYxb2sK",
+      "endpoints": [
+        "https://github.com/eterniastudio/sonic/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
       }
     }
   }

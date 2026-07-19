@@ -1,0 +1,65 @@
+{
+  "id": "local:night-shift",
+  "source": {
+    "kind": "localFile",
+    "path": "C:\\Music\\Night Shift.wav"
+  },
+  "sourceFingerprint": "sha256:fixture-source",
+  "title": "Night Shift",
+  "artist": "Eternia",
+  "description": null,
+  "thumbnailUrl": null,
+  "webpageUrl": null,
+  "isLive": false,
+  "audio": {
+    "container": "wav",
+    "codec": "pcm_s24le",
+    "sampleRateHz": 48000,
+    "channels": 2,
+    "bitDepth": 24,
+    "durationMs": 173250,
+    "fileSizeBytes": 49824000
+  },
+  "declaredMetadata": {
+    "bpm": null,
+    "alternateBpms": [],
+    "key": null,
+    "camelot": null,
+    "detuneCents": null,
+    "tuningHz": null,
+    "confidence": 0,
+    "matches": [],
+    "warnings": []
+  },
+  "embeddedMetadata": {
+    "bpm": 144,
+    "alternateBpms": [72],
+    "key": "F# minor",
+    "camelot": "11A",
+    "detuneCents": -31.8,
+    "tuningHz": 432,
+    "confidence": 0.9,
+    "matches": [],
+    "warnings": []
+  },
+  "suggestedMetadata": {
+    "bpm": 144,
+    "alternateBpms": [72],
+    "key": "F# minor",
+    "camelot": "11A",
+    "detuneCents": -31.8,
+    "tuningHz": 432,
+    "confidence": 0.9,
+    "matches": [
+      {
+        "kind": "embeddedBpm",
+        "displayValue": "144 BPM",
+        "rawText": "TBPM=144",
+        "source": "embedded",
+        "confidence": 0.9
+      }
+    ],
+    "warnings": []
+  },
+  "warnings": []
+}

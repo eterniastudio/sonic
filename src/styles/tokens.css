@@ -1,0 +1,35 @@
+:root {
+  font-family: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", sans-serif;
+  color: #f3f3f1;
+  background: #0b0b0c;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+
+  --bg: #0b0b0c;
+  --rail: #101011;
+  --surface-1: #131315;
+  --surface-2: #19191c;
+  --surface-3: #212125;
+  --surface-hover: #28282d;
+  --field: #101012;
+  --line: rgba(255, 255, 255, 0.075);
+  --line-strong: rgba(255, 255, 255, 0.145);
+  --text: #f3f3f1;
+  --text-2: #b8b8be;
+  --text-3: #85858e;
+  --signal: #ff3b38;
+  --signal-hover: #ff5350;
+  --signal-soft: rgba(255, 59, 56, 0.12);
+  --success: #56cf7e;
+  --success-soft: rgba(86, 207, 126, 0.12);
+  --warning: #efb650;
+  --warning-soft: rgba(239, 182, 80, 0.12);
+  --danger-soft: rgba(255, 75, 72, 0.1);
+  --focus: rgba(255, 255, 255, 0.92);
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --shadow-float: 0 20px 64px rgba(0, 0, 0, 0.5);
+}

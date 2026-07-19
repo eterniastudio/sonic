@@ -768,4 +768,16 @@ mod tests {
         let labelled = parse_music_metadata("Beat", "detune: -42");
         assert_eq!(labelled.detune_cents, Some(-42.0));
     }
+
+    #[test]
+    fn parses_bracketed_master_pitch_from_producer_descriptions() {
+        let parsed = parse_music_metadata(
+            "[FREE] Detuned Type Beat",
+            "[ KEY: F# MINOR ] | [ MASTER PITCH: -300 cents ] | [ TEMPO: 105 BPM ]",
+        );
+        assert_eq!(parsed.bpm, Some(105.0));
+        assert_eq!(parsed.key.as_deref(), Some("F# minor"));
+        assert_eq!(parsed.camelot.as_deref(), Some("11A"));
+        assert_eq!(parsed.detune_cents, Some(-300.0));
+    }
 }

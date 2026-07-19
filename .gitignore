@@ -10,11 +10,15 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+artifacts/
 *.local
 
 # Reproducibly fetched third-party sidecars (run `npm run tools:fetch`)
 src-tauri/binaries/*.exe
 src-tauri/binaries/versions.json
+src-tauri/binaries/python-runtime/
+licenses/FFMPEG-LGPL-3.0.txt
+licenses/PYTHON-*.txt
 .cache/
 .playwright-cli/
 output/playwright/
