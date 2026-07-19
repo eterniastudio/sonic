@@ -372,6 +372,21 @@ function Get-SonicShortcuts {
   return @($matching | Sort-Object Path -Unique)
 }
 
+function Resolve-ShortcutIconPath {
+  param(
+    [Parameter(Mandatory = $true)][object]$Shortcut
+  )
+
+  $iconLocation = [string]$Shortcut.IconLocation
+  if (-not [string]::IsNullOrWhiteSpace($iconLocation)) {
+    $explicitPath = ($iconLocation -replace ',\s*-?\d+\s*$', '').Trim('"')
+    if (-not [string]::IsNullOrWhiteSpace($explicitPath)) {
+      return $explicitPath
+    }
+  }
+  return [string]$Shortcut.TargetPath
+}
+
 function Get-SonicUninstallRegistrations {
   param(
     [Parameter(Mandatory = $true)][string[]]$RegistryRoots
@@ -740,13 +755,11 @@ try {
     throw "The installer created a Sonic shortcut that does not target the isolated executable: $($unexpectedShortcuts[0].Path) -> $($unexpectedShortcuts[0].TargetPath)"
   }
   foreach ($shortcut in $trackedShortcuts) {
-    if (-not [string]::IsNullOrWhiteSpace($shortcut.IconLocation)) {
-      $shortcutIconPath = ($shortcut.IconLocation -replace ',\s*-?\d+\s*$', '').Trim('"')
-      if (-not (Test-Path -LiteralPath $shortcutIconPath -PathType Leaf)) {
-        throw "Shortcut icon location does not exist: $($shortcut.IconLocation)"
-      }
-      Assert-IconMatches -Path $shortcutIconPath -ExpectedFingerprint $embeddedIconFingerprint -Description "shortcut $($shortcut.Path)"
+    $shortcutIconPath = Resolve-ShortcutIconPath -Shortcut $shortcut
+    if ([string]::IsNullOrWhiteSpace($shortcutIconPath) -or -not (Test-Path -LiteralPath $shortcutIconPath -PathType Leaf)) {
+      throw "Shortcut icon could not be resolved from '$($shortcut.IconLocation)' and target '$($shortcut.TargetPath)'."
     }
+    Assert-IconMatches -Path $shortcutIconPath -ExpectedFingerprint $embeddedIconFingerprint -Description "shortcut $($shortcut.Path)"
     Write-Host "Verified shortcut target: $($shortcut.Path)"
   }
 

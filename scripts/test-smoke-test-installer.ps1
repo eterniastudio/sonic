@@ -36,6 +36,7 @@ foreach ($functionName in @(
   'Get-SonicUninstallRegistrations',
   'Get-SonicRunEntries',
   'Get-SonicShortcuts',
+  'Resolve-ShortcutIconPath',
   'Assert-CleanSonicPreflight',
   'Remove-OwnedRegistryKey',
   'Remove-OwnedRunEntries',
@@ -87,13 +88,26 @@ foreach ($contract in @(
 
 # Load only the two pure argument-formatting functions' AST extents; do not
 # dot-source or run the installer smoke script.
-foreach ($pureFunctionName in @('ConvertTo-WindowsCommandLineArgument', 'ConvertTo-NsisInstallArguments')) {
+foreach ($pureFunctionName in @('ConvertTo-WindowsCommandLineArgument', 'ConvertTo-NsisInstallArguments', 'Resolve-ShortcutIconPath')) {
   $definition = $ast.Find({
     param($node)
     $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
       $node.Name -ceq $pureFunctionName
   }, $true)
   Invoke-Expression $definition.Extent.Text
+}
+
+$shortcutIconCases = @(
+  @{ IconLocation = ',0'; TargetPath = 'C:\Program Files\Sonic\Sonic.exe'; Expected = 'C:\Program Files\Sonic\Sonic.exe' },
+  @{ IconLocation = '"C:\Program Files\Sonic\Sonic.exe",0'; TargetPath = 'C:\fallback.exe'; Expected = 'C:\Program Files\Sonic\Sonic.exe' },
+  @{ IconLocation = ''; TargetPath = 'C:\Sonic\Sonic.exe'; Expected = 'C:\Sonic\Sonic.exe' }
+)
+foreach ($case in $shortcutIconCases) {
+  $shortcut = [PSCustomObject]@{ IconLocation = $case.IconLocation; TargetPath = $case.TargetPath }
+  $actual = Resolve-ShortcutIconPath -Shortcut $shortcut
+  if ($actual -cne $case.Expected) {
+    throw "Shortcut icon resolution failed for '$($case.IconLocation)': expected '$($case.Expected)', got '$actual'."
+  }
 }
 
 $quotingCases = @(
