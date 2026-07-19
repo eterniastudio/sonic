@@ -24,17 +24,17 @@ decorative cards:
 
 ## Captures
 
-Committed product capture:
+The repository presentation uses a consistent 1600 × 1000 product gallery:
 
-- `docs/sonic-workstation.png` — Session at 1440 × 900.
+- `docs/screenshots/sonic-session.png` — Session and metadata inspector;
+- `docs/screenshots/sonic-metadata-evidence.png` — expanded source evidence;
+- `docs/screenshots/sonic-export-progress.png` — safe publication in progress;
+- `docs/screenshots/sonic-library.png` — Beat Library and loaded preview; and
+- `docs/screenshots/sonic-settings.png` — defaults, verified engine, updater,
+  and diagnostics in the deterministic browser fixture.
 
-Ignored Playwright QA captures:
-
-- `output/playwright/sonic-session-release.png`
-- `output/playwright/sonic-library-1440.png`
-- `output/playwright/sonic-settings-1440.png`
-- `output/playwright/sonic-session-960x680-final.png`
-- `output/playwright/sonic-shortcuts-960x680.png`
+The README hero and 1280 × 640 social card are restrained product mockups
+framing those real interface captures; they do not replace the product gallery.
 
 ## Browser verification
 

@@ -1,18 +1,38 @@
-# Sonic
+<!-- markdownlint-disable MD013 MD028 MD033 MD041 -->
 
-Sonic is a local-first intake, metadata, export, and library workstation for
-beat producers. Bring in authorized YouTube videos or local audio, verify the
-declared musical information, choose a producer-ready export recipe, and keep
-the result in a searchable local library.
+<div align="center">
+  <img src="src-tauri/icons/128x128@2x.png" width="112" alt="Sonic app icon" />
+  <h1>Sonic</h1>
+  <p><strong>Turn authorized beat references into organized, producer-ready files.</strong></p>
+  <p>
+    A local-first Windows workstation for media intake, musical metadata review,
+    batch export, and beat library organization.
+  </p>
+  <p>
+    <a href="https://github.com/eterniastudio/sonic/actions/workflows/ci.yml"><img alt="CI status" src="https://github.com/eterniastudio/sonic/actions/workflows/ci.yml/badge.svg" /></a>
+    <a href="https://github.com/eterniastudio/sonic/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/eterniastudio/sonic?display_name=tag&sort=semver&color=ff4545" /></a>
+    <img alt="Windows 10 and 11 x64" src="https://img.shields.io/badge/Windows-10%20%7C%2011%20x64-24252b?logo=windows11&logoColor=white" />
+    <a href="LICENSE"><img alt="Source-available license" src="https://img.shields.io/badge/license-source--available-24252b" /></a>
+  </p>
+  <p>
+    <a href="https://github.com/eterniastudio/sonic/releases/latest"><strong>Download for Windows</strong></a>
+    ·
+    <a href="#see-sonic">See the interface</a>
+    ·
+    <a href="#build-from-source">Build from source</a>
+  </p>
+</div>
 
-[![CI](https://github.com/eterniastudio/sonic/actions/workflows/ci.yml/badge.svg)](https://github.com/eterniastudio/sonic/actions/workflows/ci.yml)
-[![Windows release](https://github.com/eterniastudio/sonic/actions/workflows/release.yml/badge.svg)](https://github.com/eterniastudio/sonic/actions/workflows/release.yml)
-[![Latest release](https://img.shields.io/github/v/release/eterniastudio/sonic?display_name=tag&sort=semver)](https://github.com/eterniastudio/sonic/releases/latest)
+![Sonic running in a modern production studio](docs/mockups/sonic-studio-hero.png)
 
-![Sonic producer workstation](docs/sonic-workstation.png)
+<div align="center">
+  <sub>Designed and published by <a href="https://github.com/eterniastudio">Eternia Studios</a>, an individual creator account.</sub>
+</div>
 
-Sonic is published from Eternia Studios' individual GitHub account,
-[`@eterniastudio`](https://github.com/eterniastudio).
+> [!NOTE]
+> This branch contains the upcoming **Sonic v0.2 producer workstation**. The
+> latest public installer is currently **v0.1.3**; release links continue to
+> point to that verified public build until v0.2 is tagged.
 
 > [!IMPORTANT]
 > Sonic is for media you own or are authorized to download and process. It
@@ -20,376 +40,310 @@ Sonic is published from Eternia Studios' individual GitHub account,
 > restrictions, or platform safeguards. Sonic is not affiliated with or
 > endorsed by YouTube.
 
-## What changed in v0.2
+## Producer intake, without the converter-site experience
 
-Version 0.2 turns the original single-download flow into a producer
-workstation:
+Sonic replaces the fragile “download, rename, inspect, convert, and somehow
+remember where it went” routine with one focused desktop workspace.
 
-- multi-source sessions with independent metadata and export settings;
-- drag-and-drop and file-picker intake for local audio;
-- a persistent, pauseable, reorderable export queue with up to three workers;
-- eight fixed and honestly labelled export recipes;
-- declared, embedded, suggested, and user-selected metadata shown separately;
-- embedded metadata writing plus a versioned `.sonic.json` sidecar;
-- filename templates with safe previews and producer-oriented tokens;
-- a SQLite-backed local Beat Library with search, filters, re-export, reveal,
-  missing-file detection, and explicit deletion controls;
-- bounded local audio previews, waveform seeking, looping, tap tempo, and
-  half-time/double-time correction;
-- startup recovery for interrupted work and no-clobber paired publication;
-- engine, database, recovery, and redacted-support diagnostics;
-- signed GitHub Release update checks with explicit download/install consent;
-- a modular React/Rust architecture with frontend contract, reducer,
-  accessibility, and coverage tests.
+| Intake | Verify | Export | Organize |
+| --- | --- | --- | --- |
+| Add authorized YouTube links or drop local audio. | Compare declared, embedded, suggested, and final metadata. | Choose a fixed producer-ready recipe and safe filename. | Search, audition, reveal, and re-export from the local Beat Library. |
 
-Sonic still does **not** claim to detect BPM, key, or tuning directly from the
-audio signal. It parses declared text and embedded tags, then lets the producer
-verify or correct the final values. Audio-derived analysis remains future work.
+No Sonic account. No subscription. No analytics. No hosted conversion
+backend. Your queue, metadata decisions, exports, and library stay on your
+Windows machine.
 
-## Why Sonic exists
+## See Sonic
 
-Producer intake should not depend on ad-filled converter sites or opaque
-hosted services. Sonic keeps the queue, metadata decisions, conversion,
-naming, history, and diagnostics on the local Windows machine.
+### One session, every decision in view
 
-There are no Sonic accounts, subscriptions, analytics, remote conversion
-servers, browser extensions, cookie imports, or self-updating media binaries.
-Network access happens only when Sonic inspects or acquires a URL, when the
-user explicitly sets up the pinned media engine, or when Windows/GitHub checks
-for release information outside the app.
+![Sonic Session showing a two-item producer queue and metadata inspector](docs/screenshots/sonic-session.png)
 
-## Core workflow
+Review source identity, BPM, key, Camelot value, detune, confidence, filename,
+destination, and export recipe without leaving the session.
 
-1. Add one or more authorized YouTube URLs, import local audio, or drop files
-   into the Session.
-2. Sonic inspects every source before export. Local files are hashed and
-   probed; remote sources are validated and inspected through the isolated
-   acquisition provider.
-3. Compare declared metadata, embedded metadata, Sonic's suggestion, and the
-   editable final values.
-4. Choose a preset, channel policy, optional LUFS normalization, tag policy,
-   filename template, and destination.
-5. Queue one item or the complete reviewed batch. Pause dispatch, reorder
-   pending work, cancel active work, or retry an interrupted export.
-6. Sonic processes each job in a private staging directory, validates the
-   output, writes its sidecar, and publishes the audio/sidecar pair without
-   overwriting existing files.
-7. Search, preview, reveal, re-export, or remove the completed item from the
-   Beat Library.
+### Trace every suggestion to its source
 
-## Features
+![Sonic metadata evidence expanded](docs/screenshots/sonic-metadata-evidence.png)
 
-### Producer metadata
+See the exact title or description matches behind BPM, key, and tuning
+suggestions before committing them to an export.
 
-- BPM formats such as `BPM: 144`, `144 BPM`, and `72 / 144 BPM`;
-- common major, minor, modal, sharp/flat, compact, and Camelot key formats;
-- detune in cents, semitones, half-steps, and directional language;
-- `A=432Hz`-style tuning converted to a cents offset from A440;
-- source evidence, confidence, alternate tempos, and conflict warnings;
-- separate Declared, Embedded, Suggested, and Final values;
-- one-click suggested reset, alternate BPM selection, and half/double tempo;
-- editable title, artist/producer, BPM, key, detune, and export tags.
+### A real local archive
+
+![Sonic Beat Library with local preview loaded](docs/screenshots/sonic-library.png)
+
+Search completed exports, detect missing files, and audition audio from the
+persistent waveform transport.
+
+### Safe publication you can watch
+
+![Sonic publishing one export while the next item waits in the queue](docs/screenshots/sonic-export-progress.png)
+
+Every job moves through acquisition or local copy, conversion, tagging,
+validation, and no-clobber publication. Pause dispatch, cancel active work,
+reorder pending items, or retry interrupted exports.
+
+<sub>The product gallery uses Sonic's deterministic browser-preview fixture and synthetic producer data, so documentation captures never need real media, URLs, or personal paths. Native-only actions are labelled in the interface.</sub>
+
+## The workflow
+
+1. **Build a session.** Paste one or more authorized video links, pick local
+   audio, or drag supported files into Sonic.
+2. **Review the evidence.** Sonic inspects the source and presents declared
+   text, embedded tags, conflicts, confidence, and editable final values.
+3. **Choose the output.** Select a fixed preset, channel policy, optional LUFS
+   target, embedded-tag policy, naming template, and destination.
+4. **Queue the work.** Export one reviewed item or a complete batch with one to
+   three local workers.
+5. **Return to the library.** Search, preview, reveal, re-export, remove the
+   history record, or explicitly delete verified audio and its sidecar.
+
+## What Sonic understands
+
+Sonic parses producer-declared musical information from source text,
+filenames, and supported embedded tags.
+
+| Source example | Interpreted result |
+| --- | --- |
+| `BPM: 144`, `144 BPM` | 144 BPM |
+| `72 / 144 BPM` | 144 BPM with a 72 BPM alternate |
+| `KEY: F# minor`, `F#m`, `11A` | F-sharp minor / Camelot 11A |
+| `detuned -18 cents`, `-0.25 st` | Signed cents offset |
+| `Tuning: A=432Hz` | Approximately -31.8 cents from A440 |
+
+The inspector deliberately keeps four concepts separate:
+
+- **Declared** — what the source text says;
+- **Embedded** — what supported container tags say;
+- **Suggested** — Sonic's evidence-ranked interpretation; and
+- **Final** — the producer's editable decision used for naming and export.
+
+Sonic supports common major, minor, modal, sharp/flat, compact, and Camelot
+key formats; alternate and half/double-time tempos; detune in cents,
+semitones, half-steps, or directional language; source evidence; confidence;
+and conflict warnings.
+
+> [!CAUTION]
+> Sonic v0.2 does **not** derive BPM, key, or tuning from the audio signal. It
+> parses declared text and embedded metadata, then asks the producer to verify
+> or correct the final values. Audio-derived analysis is a future boundary,
+> not a current marketing claim.
+
+## Built for producer workflows
+
+### Sessions and queue
+
+- Independent metadata and export settings for every source.
+- Persistent SQLite job state, ordering, pause state, and event history.
+- One, two, or three concurrent workers.
+- Progress, speed, ETA, stage, cancellation, retry, and revision-safe edits.
+- Startup recovery for interrupted jobs and already-published pairs.
+- Batch review without hidden playlist ingestion.
 
 ### Local audio intake
 
-The desktop picker and drop surface accept WAV, MP3, M4A, FLAC, Opus, OGG,
-and WebM audio. Rust validates that the path is absolute, the entry is a
-regular non-reparse file, the extension is allowed, the size is within the
-configured limit, and ffprobe reports an audio stream.
+Sonic accepts WAV, MP3, M4A, FLAC, Opus, OGG, and WebM audio. The native core
+requires an absolute, regular, non-reparse file; checks its type and configured
+size limit; verifies that ffprobe reports an audio stream; computes a SHA-256
+source fingerprint; and rechecks that fingerprint before export.
 
-Sonic reads available container tags, analyzes the filename and tags for
-producer metadata, computes a SHA-256 source fingerprint, and rechecks that
-fingerprint before using the file in an export.
+### Producer-ready export recipes
 
-### Session queue
-
-- independent settings for every source;
-- batch review and queueing without playlist ingestion;
-- persistent job state and ordering in SQLite;
-- concurrency limit of one, two, or three exports;
-- pause/resume dispatch while allowing active work to finish safely;
-- queued-item editing with revision guards;
-- progress, speed, ETA, stage, and actionable error state;
-- cancellation, retry, reordering, and completed-item cleanup;
-- startup recovery of interrupted or fully published jobs.
-
-### Export recipes
-
-Sonic exposes fixed recipes instead of arbitrary FFmpeg arguments.
+Sonic exposes fixed recipes rather than arbitrary FFmpeg arguments.
 
 | Preset | Output behavior |
 | --- | --- |
-| Original stream | Preserves the acquired/local stream when possible; no processing or new embedded tags. |
+| Original stream | Preserve the acquired or local stream when possible. |
 | MP3 V0 | High-quality variable-bitrate MP3. |
-| MP3 320 kbps | Constant 320 kbps MP3. |
-| M4A AAC 256 kbps | AAC at 256 kbps in an M4A container. |
-| WAV 44.1 kHz / 24-bit | Stereo/preserved-channel PCM for common music sessions. |
-| WAV 48 kHz / 24-bit | PCM for 48 kHz production and video sessions. |
+| MP3 320 | Constant 320 kbps MP3. |
+| M4A AAC 256 | AAC at 256 kbps in an M4A container. |
+| WAV 44.1 / 24 | 24-bit PCM for common music sessions. |
+| WAV 48 / 24 | 24-bit PCM for 48 kHz production and video sessions. |
 | FLAC | Lossless compressed audio. |
-| Opus 192 kbps | Efficient 192 kbps Opus audio. |
+| Opus 192 | Efficient 192 kbps Opus audio. |
 
-For processed presets, producers can preserve channels, force stereo, or
-force mono; enable supported embedded tags; and optionally normalize between
--24 and -8 LUFS. Conversion cannot restore fidelity that is absent from the
-source.
+Processed presets can preserve channels, force stereo or mono, write
+supported embedded tags, and optionally normalize between -24 and -8 LUFS.
+Conversion cannot restore quality that is absent from the source.
 
 ### Naming and sidecars
 
-Filename templates support:
+Templates support producer-oriented tokens:
 
 ```text
-{title} {producer} {bpm} {key} {camelot} {detune} {source} {date} {preset}
+{title} {producer} {bpm} {key} {camelot} {detune} {preset} {source} {date}
 ```
-
-Examples:
 
 ```text
 {producer} - {title} [{bpm} BPM] [{key}]
 {title}_{camelot}_{detune}_{preset}
 ```
 
-The Rust backend is authoritative for rendering and sanitizing names. It
-rejects unknown or unclosed tokens, control characters, unsafe Windows device
-names, and paths masquerading as filenames. A collision receives a numbered
-suffix; an existing file is never silently replaced.
+Rust is authoritative for rendering and sanitizing filenames. Unknown tokens,
+control characters, unsafe Windows device names, and path-like filenames are
+rejected. Collisions receive numbered suffixes; existing files are never
+silently replaced.
 
-Every export receives a versioned `.sonic.json` sidecar containing the source
-kind and fingerprint, final metadata, evidence and warnings, output audio
+Every processed export receives a versioned `.sonic.json` sidecar with source
+identity and fingerprint, final metadata, evidence and warnings, output audio
 properties, export recipe, tag readback status, output SHA-256, and Sonic
-schema/version identifiers. Full local source paths are excluded by default
-and can be enabled explicitly in Settings.
+schema/version identifiers. Full local source paths are excluded by default.
+See the [sidecar v1 reference](docs/sidecar-schema.md).
 
-See [`docs/sidecar-schema.md`](docs/sidecar-schema.md) for the v1 field
-reference, privacy behavior, and integrity rules.
+### Beat Library and preview transport
 
-### Beat Library
+- Search title, producer, filename, BPM, key, or Camelot value.
+- Filter by format, tempo range, key, or missing-file state.
+- Load a bounded local preview with waveform seek and loop.
+- Tap tempo or apply half-time/double-time correction.
+- Reveal the export, open an available source, or create a new export.
+- Remove history without deleting audio, or explicitly delete a verified
+  audio/sidecar pair.
 
-Completed exports can be recorded in a local SQLite library. Search covers
-title, artist/producer, filename, BPM, key, and Camelot; filters cover format,
-tempo range, key, and missing files.
+Deletion is conservative: Sonic revalidates file identity, sidecar identity,
+and audio hash before it removes anything. Changed or replaced files are left
+untouched.
 
-Library actions include:
+## Local-first by design
 
-- load a bounded local preview and seek its waveform;
-- show the output in Explorer;
-- open the original source where it is still available;
-- create a new export from the recorded audio;
-- remove only the local history record; or
-- explicitly delete the verified audio and matching sidecar.
+The React renderer cannot execute arbitrary processes or access arbitrary
+files. The Rust/Tauri core owns URL and path validation, SQLite writes,
+filename rendering, process arguments, cancellation, staging, publication,
+preview scoping, deletion, and diagnostics.
 
-Deletion is deliberately conservative. Sonic revalidates the recorded files,
-sidecar identity, and audio hash before deleting anything. A changed or
-replaced file is left untouched.
+- Canonical HTTPS video URLs only; no playlist, live, private-auth, or cookie
+  modes. The acquisition engine also disables yt-dlp plugins, remote
+  components, and media-tool self-updates. Sonic's signed application updater
+  is a separate, narrowly configured path.
+- Absolute verified executable paths and a minimal subprocess environment.
+- No shell interpolation and no arbitrary FFmpeg option input.
+- Duration, source-size, free-space, concurrency, preview, and queue limits.
+- Same-volume private staging and no-replace paired publication.
+- Redacted diagnostic exports without source URLs or personal paths.
+- No product analytics and no hosted Sonic conversion backend.
 
-### Preview transport
+Sonic is **local-first, not offline**. Network access occurs when you inspect
+or acquire an authorized remote URL, explicitly install the pinned media
+engine, or check GitHub for a Sonic update.
 
-Local Session sources and Library items can be rendered into a short MP3 in
-Sonic's application cache. The persistent transport supports play/pause,
-waveform seek, loop, tap tempo, and half-time/double-time correction.
+## Download and updates
 
-Preview files use UUID names, live only in Sonic's scoped preview cache, are
-strictly bounded by duration/count/total size, and are removed on release or
-cache eviction. A remote YouTube source cannot be previewed before it becomes
-a validated local export; the interface labels that boundary instead of
-simulating playback.
+### Public Windows installer
 
-## Download
+[**Download the latest Windows x64 installer →**](https://github.com/eterniastudio/sonic/releases/latest)
 
-Download the latest Windows x64 installer from
-[Eternia Studios releases](https://github.com/eterniastudio/sonic/releases/latest).
+Sonic targets Windows 10/11 x64 and Microsoft WebView2. The current public
+build is v0.1.3; the full workstation interface documented here ships with the
+next v0.2 release.
 
 > [!WARNING]
-> The current installer is not Authenticode-signed, so Windows SmartScreen may
-> warn before installation. Sonic's in-app updater separately verifies every
-> update with its embedded Tauri public key. You can also verify
-> `SHA256SUMS.txt` and the GitHub artifact attestation before running it.
+> The installer is not currently Authenticode-signed, so Windows SmartScreen
+> may warn before installation. The current v0.1.3 release includes
+> `SHA256SUMS.txt` for installer verification. The v0.2 release pipeline also
+> adds GitHub build-provenance attestation.
 
-Each release includes:
+<details>
+<summary><strong>Verify the current installer checksum</strong></summary>
 
-- `Sonic_<version>_x64-setup.exe`, the NSIS installer;
-- `Sonic_<version>_x64-setup.exe.sig` and `latest.json` for signed updates;
-- `SHA256SUMS.txt` for every release attachment;
-- npm and Cargo CycloneDX SBOMs;
-- generated npm and Rust dependency-license reports;
-- the pinned tool manifest and FFmpeg build configuration;
-- Sonic's license, third-party notices, and applicable license texts; and
-- GitHub build-provenance attestation.
+Download the installer and `SHA256SUMS.txt` from the same release, open
+PowerShell in that folder, and run:
 
-The installer contains pinned yt-dlp and CPython components. Node.js, Rust,
-Python, yt-dlp, Deno, and FFmpeg do not need to be installed globally.
+```powershell
+$installer = Get-ChildItem .\Sonic_*-setup.exe | Select-Object -First 1
+$expected = (Select-String .\SHA256SUMS.txt -Pattern 'Sonic_.*-setup\.exe').Line.Split()[0]
+$actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer.FullName).Hash
+if ($actual.ToLowerInvariant() -ne $expected.ToLowerInvariant()) {
+  throw "Installer checksum mismatch"
+}
+```
 
-### Automatic updates
+</details>
 
-Installed copies check the latest Eternia Studios GitHub Release shortly after
-startup. Sonic only reports that an update is available; downloading and
-installation require an explicit click in **Settings → Software update**.
-Every updater artifact is verified against the public key embedded in the app,
-and Windows uses Tauri's recommended passive installation mode. Sonic closes
-while the verified update is installed and then reopens.
+### Beginning with v0.2: signed in-app updates
 
-The updater endpoint is
-`https://github.com/eterniastudio/sonic/releases/latest/download/latest.json`.
-Release CI signs the NSIS artifact with the repository's protected
-`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets,
-then publishes the signature plus static metadata. Neither secret is committed.
-Versions installed before this feature need one final manual installer upgrade
-before they can update in-app.
+Installed v0.2+ builds check the latest Eternia Studios GitHub Release shortly
+after startup. Sonic reports availability first; download and installation
+require an explicit click in **Settings → Software update**. Tauri verifies the
+updater artifact against the public key embedded in Sonic before Windows runs
+the passive installer.
+
+People on v0.1.x need one final manual installer upgrade before in-app updates
+become available.
 
 ### First-run media engine setup
 
-FFmpeg, ffprobe, and Deno are not redistributed inside the installer. When
-they are missing, Sonic offers an explicit **Set up engine** action. The setup
-downloads immutable pinned artifacts directly from the upstream release
-hosts, verifies archive and executable hashes, records provenance, and
-re-verifies the executables before every launch.
+The installer contains pinned yt-dlp and CPython components. FFmpeg, ffprobe,
+and Deno are installed only after an explicit **Set up engine** action. Sonic
+downloads immutable pinned artifacts from upstream release hosts, verifies
+archive and executable hashes, records provenance, and re-verifies the tools
+before launch.
 
 - Approximate download: 180 MiB.
 - Local path: `%LOCALAPPDATA%\studio.eternia.sonic\media-engine`.
-- FFmpeg distribution: retained BtbN LGPL build.
-- Cleanup: the uninstaller uses a reparse-aware media-engine cleanup hook.
+- No global Node.js, Python, yt-dlp, Deno, or FFmpeg installation required.
+- Exact versions, origins, hashes, and licenses live in
+  [`scripts/tool-manifest.json`](scripts/tool-manifest.json).
 
-See [`scripts/tool-manifest.json`](scripts/tool-manifest.json) and
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for exact versions, URLs,
-hashes, sources, and licenses.
+<details>
+<summary><strong>Release contents and integrity</strong></summary>
 
-### Pinned media components
+Beginning with v0.2, a tagged release is designed to include:
 
-| Component | Version | Delivery | License |
-| --- | --- | --- | --- |
-| yt-dlp zipimport package | 2026.07.04 | Bundled | Unlicense with ISC/MIT components |
-| CPython embedded runtime | 3.13.14 | Bundled | PSF-2.0 and bundled notices |
-| Deno | 2.9.2 | Explicit upstream download | MIT |
-| FFmpeg and ffprobe | `N-125365-g9a01c1cb6a-20260630` | Explicit upstream download | LGPL-3.0-or-later |
+- the NSIS installer, updater signature, and `latest.json`;
+- `SHA256SUMS.txt` and GitHub build-provenance attestation;
+- npm and Cargo CycloneDX SBOMs;
+- generated dependency-license reports;
+- the pinned media-tool manifest and FFmpeg build configuration; and
+- Sonic's license, third-party notices, and applicable license texts.
 
-The manifest pins Sonic's selected media artifacts. It does not claim that
-GitHub's Windows runner or the complete NSIS output is bit-for-bit
-reproducible.
+Release CI validates versions, tests both codebases, fetches pinned tools,
+builds the installer, silently installs and launches it on a clean Windows
+runner, verifies packaged tools and icons, validates update metadata,
+uninstalls it, checks cleanup, hashes the result, and attests the artifacts.
 
-Sonic targets Windows 10/11 x64 and Microsoft WebView2.
-
-## Verify a release
-
-From PowerShell in the folder containing the installer and checksum file:
-
-```powershell
-$expected = (Select-String -Path .\SHA256SUMS.txt -Pattern 'Sonic_.*-setup\.exe').Line.Split()[0]
-$installer = Get-ChildItem .\Sonic_*-setup.exe | Select-Object -First 1
-$actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer.FullName).Hash.ToLowerInvariant()
-if ($actual -ne $expected.ToLowerInvariant()) { throw "Installer checksum mismatch" }
-```
-
-The release page also exposes GitHub's artifact attestation for provenance
-verification.
-
-## Privacy and security model
-
-- The React renderer has no arbitrary process or filesystem execution API.
-- Rust owns URL validation, local-path validation, SQLite writes, filename
-  rendering, process arguments, cancellation, staging, publication, preview
-  scoping, deletion, and diagnostics.
-- YouTube intake accepts canonical HTTPS video URLs only; playlists, live
-  sources, private authentication, plugins, user configuration, remote
-  components, and yt-dlp self-updates are disabled.
-- Every executable is resolved by absolute path and checked against the pinned
-  manifest. Media subprocesses receive a minimal environment rather than the
-  user's general `PATH`.
-- User text never becomes a shell command or arbitrary FFmpeg option.
-- Configurable duration, source-size, free-space, concurrency, preview, and
-  queue limits bound work.
-- Jobs use a same-volume `.sonic-job-<UUID>` staging directory, then publish a
-  verified audio/sidecar pair with no-replace file operations.
-- Queue revisions prevent stale reorder, pause, and queued-edit writes.
-- The local SQLite database uses a schema version, application ID, and WAL.
-- Diagnostic exports contain versions, health, and aggregate state, with
-  source URLs and personal paths redacted.
-- Update metadata comes only from the configured HTTPS Eternia Studios release
-  endpoint, and the downloaded installer must pass Tauri signature validation.
-- Sonic includes no product analytics or hosted Sonic conversion backend.
-
-Sonic is local-first, not offline: URL inspection/acquisition and explicit
-engine setup contact their respective providers.
+</details>
 
 ## Architecture
 
-```text
-React 19 + TypeScript
-  app state/reconciliation
-  Session / Inspector / Library / Settings / Transport
-  native bridge + browser preview fixture
-             |
-             | typed Tauri commands and events
-             v
-Rust + Tauri 2
-  commands      typed IPC and compatibility aliases
-  acquisition   YouTube/local inspection and ffprobe
-  jobs          persistent scheduler, workers, cancellation, recovery
-  presets       fixed FFmpeg recipes and tag arguments
-  filesystem    paths, templates, staging, no-clobber publication
-  storage       SQLite settings, jobs/events, and Beat Library
-  preview       bounded preview cache and waveform extraction
-  sidecar       versioned privacy-aware producer metadata
-  tools         pinned executable resolution and environment isolation
-             |
-             +-- CPython -> yt-dlp zipimport
-             +-- verified Deno challenge runtime
-             +-- verified FFmpeg / ffprobe
-```
+| Layer | Responsibility |
+| --- | --- |
+| React 19 + TypeScript | Session state, review UI, Library, Settings, transport, typed native bridge, and deterministic browser fixture. |
+| Rust + Tauri 2 | Validated commands, acquisition, scheduling, presets, filesystem policy, SQLite, previews, sidecars, tool isolation, and recovery. |
+| Pinned media engine | CPython + yt-dlp for authorized acquisition, Deno for supported challenge execution, and FFmpeg/ffprobe for verified media work. |
 
-The acquisition provider is intentionally behind a native boundary so the
-local-file, metadata, export, and library features remain useful independently
-of one remote provider.
+The acquisition provider sits behind the native boundary, so local-file,
+metadata, export, and library workflows remain useful independently of one
+remote provider.
 
-## Local data
+## Build from source
 
-Sonic stores its database, preview cache, and optional media engine under the
-Tauri application-data/cache locations for `studio.eternia.sonic`.
-
-The SQLite database contains settings, persistent queue requests and events,
-and optional Library records. It does not contain account credentials or
-browser cookies. Removing a Library history record does not delete audio;
-deleting audio is a separate, confirmed action.
-
-Database schema migrations are forward-only. Pre-1.0 releases support the
-latest schema on a best-effort basis, so back up irreplaceable audio and
-sidecars independently of Sonic's database.
-
-## Development
-
-Requirements:
+### Requirements
 
 - Windows 10/11 x64;
 - Node.js 22 and npm;
 - Rust 1.94.0 with the MSVC target, rustfmt, and Clippy;
-- Tauri's Windows build prerequisites and WebView2; and
+- Tauri's Windows prerequisites and Microsoft WebView2; and
 - PowerShell 5.1 or later.
 
-Install the JavaScript dependencies:
+### Run Sonic
 
 ```powershell
 npm ci
-```
-
-Fetch and verify the pinned development media tools:
-
-```powershell
 npm run tools:fetch
-```
-
-Run the desktop application:
-
-```powershell
 npm run tauri dev
 ```
 
-Run the browser-only design fixture without native file/process access:
+For browser-only interface work, use the deterministic preview adapter:
 
 ```powershell
 npm run dev
 ```
 
-## Validation
+It exercises the product interface without native file or process access.
 
-Run the same principal checks as CI:
+<details>
+<summary><strong>Run the principal quality gates</strong></summary>
 
 ```powershell
 ./scripts/validate-release-version.ps1
@@ -407,113 +361,59 @@ cargo audit --file src-tauri/Cargo.lock
 ```
 
 The live media-engine check is intentionally manual because it contacts
-YouTube. After `npm run tools:fetch`, run `npm run media:e2e` to verify the
-pinned Python, yt-dlp, Deno, FFmpeg, and ffprobe chain against the default NASA
-SVS public-domain source. The script uses Sonic's production acquisition
-arguments, creates a bounded eight-second MP3, verifies embedded tags through
-ffprobe, and removes its randomized Windows Temp workspace on success or
-failure. Pass `-Url` directly to the PowerShell script only for media you are
-authorized to download.
+YouTube. After fetching tools, `npm run media:e2e` uses Sonic's production
+arguments against the default NASA SVS public-domain source, creates a bounded
+eight-second MP3, verifies tags through ffprobe, and removes its temporary
+workspace.
 
-### Frontend bundle budget
+</details>
 
-`npm run bundle:budget` measures the complete `dist` directory after a
-production build and fails when any raw or gzip limit is exceeded. Gzip totals
-are the sum of each file compressed independently, matching the way browser
-assets are transferred. The v0.2 production baseline and enforced ceilings are:
+## Documentation
 
-| Payload | Baseline raw | Raw budget | Baseline gzip | Gzip budget |
-| --- | ---: | ---: | ---: | ---: |
-| JavaScript | 426,482 B | 440,000 B | 119,949 B | 125,000 B |
-| CSS | 40,814 B | 42,000 B | 8,110 B | 8,500 B |
-| All static files (11) | 552,471 B | 570,000 B | 211,860 B | 220,000 B |
+| Document | Purpose |
+| --- | --- |
+| [Changelog](CHANGELOG.md) | Version history and unreleased work. |
+| [Security](SECURITY.md) | Trust boundary, release verification, and vulnerability reporting. |
+| [Contributing](CONTRIBUTING.md) | Development workflow and review expectations. |
+| [Verification guide](tests/VERIFICATION.md) | Manual and automated release checks. |
+| [Sidecar schema](docs/sidecar-schema.md) | `.sonic.json` v1 fields, privacy behavior, and integrity rules. |
+| [Third-party notices](THIRD_PARTY_NOTICES.md) | Dependency and bundled-tool attribution. |
 
-Both pull-request CI and tagged-release CI run this gate immediately after the
-Vite build. Update a ceiling only with a measured, reviewed reason; do not raise
-it solely to make a regression pass.
-
-Frontend coverage is written to `artifacts/coverage/frontend`. The Vitest
-suites cover reducer reconciliation, filename behavior, formatters, JSON wire
-contracts, browser-preview queue operations, semantic smoke behavior, and axe
-accessibility checks. Rust tests cover metadata parsing, path/template policy,
-SQLite persistence and revision guards, preview bounds, sidecars, recovery,
-presets, and process/progress helpers.
-
-Release CI additionally fetches and validates the pinned tools, generates
-license reports and SBOMs, builds the NSIS installer, installs it silently on a
-clean Windows runner, launches the packaged executable, checks packaged tools
-and icons, generates signed updater metadata, uninstalls it, verifies cleanup,
-computes checksums, and attests the release artifacts.
-
-## Repository layout
+<details>
+<summary><strong>Repository layout</strong></summary>
 
 ```text
-src/
-  app/                 provider, reducer, app shell
-  components/          shared navigation and primitives
-  domain/              TypeScript models, defaults, naming, formatting
-  features/            intake, queue, inspector, library, player, settings
-  fixtures/            deterministic browser-preview implementation
-  services/            native bridge, normalizers, IPC contracts
-  styles/              tokens, reset/base, Sonic workstation visual system
-src-tauri/
-  src/                  modular Rust native core
-  capabilities/         minimal main-window permissions
-  icons/                app, executable, and installer artwork
-  windows/              NSIS lifecycle hooks
-tests/                  frontend unit, contract, interaction, and axe tests
-scripts/                pinned-tool, release, SBOM, installer, and QA scripts
-docs/                   screenshots and release/compliance references
-licenses/               third-party license texts
-.github/workflows/      validation and release installer automation
+src/                    React app, domain models, features, fixture, services
+src-tauri/src/          Modular Rust native core
+src-tauri/capabilities/ Minimal main-window permissions
+src-tauri/icons/        App, executable, and installer artwork
+src-tauri/windows/      NSIS lifecycle hooks
+tests/                  Frontend, contract, interaction, and accessibility tests
+scripts/                Tool pinning, release, SBOM, installer, and QA scripts
+docs/                   Product media, schema, and compliance references
+.github/workflows/      CI and release-installer automation
 ```
 
-## Release process
-
-Releases are tag-driven. Source versions in `package.json`,
-`package-lock.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, and
-`src-tauri/tauri.conf.json` must agree exactly with a `v<semver>` tag.
-
-```powershell
-./scripts/validate-release-version.ps1 -ExpectedTag v0.2.0
-git tag -s v0.2.0 -m "Sonic v0.2.0"
-git push origin v0.2.0
-```
-
-The GitHub Actions release job validates, builds, smoke-tests, attests, and
-publishes the installer, updater signature, and `latest.json`. The repository
-must contain `TAURI_SIGNING_PRIVATE_KEY` and
-`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` Actions secrets matching the public key in
-`src-tauri/tauri.conf.json`. For a signed local bundle, point Tauri at a secure
-key backup and load its password before building:
-
-```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY_PATH = "$HOME\.tauri\sonic-updater.key"
-$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = Get-Content -Raw "$HOME\.tauri\sonic-updater.password"
-npm run tauri build
-```
-
-Never commit or upload the private key as a normal release asset. Losing it
-prevents future in-app updates for existing installations. Do not create a
-release from an unreviewed local binary.
-
-See [`CHANGELOG.md`](CHANGELOG.md), [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md),
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), and [`LICENSE`](LICENSE)
-before contributing or distributing Sonic.
+</details>
 
 ## Roadmap boundaries
 
 The next producer-intelligence phase may add audio-derived tempo, key, and
 tuning estimates with explicit confidence and Declared-versus-Detected
-comparison. It must never silently overwrite the producer's final metadata.
+comparison. Detected values must never silently replace the producer's final
+metadata.
 
 Cookie import, DRM bypass, credential capture, playlist scraping, arbitrary
-download providers, arbitrary FFmpeg arguments, and silent sidecar self-update
-are deliberately outside the current product scope.
+download providers, arbitrary FFmpeg arguments, and silent media-tool
+self-updates are deliberately outside Sonic's scope.
 
 ## License
 
 Sonic's original source and assets are source-available under the proprietary
-terms in [`LICENSE`](LICENSE). Third-party components retain their own licenses
-as documented in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and the
+terms in [LICENSE](LICENSE). Third-party components retain their own licenses
+as documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the
 generated release reports.
+
+<div align="center">
+  <sub>Built for producers by <a href="https://github.com/eterniastudio">Eternia Studios</a>.</sub>
+</div>
