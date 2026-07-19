@@ -1,4 +1,4 @@
-Sonic v0.1.4 optional media engine build configuration
+Sonic v0.2.0 optional media engine build configuration
 ======================================================
 
 Pinned build: N-125365-g9a01c1cb6a-20260630

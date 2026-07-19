@@ -61,3 +61,27 @@ The exact runtime tool versions are recorded in
 [`scripts/tool-manifest.json`](scripts/tool-manifest.json), and principal
 licenses and sources are recorded in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+## Local data and destructive actions
+
+Sonic v0.2 keeps settings, queue requests/events, and optional Beat Library
+records in a local SQLite database. Metadata sidecars and exported diagnostics
+are JSON files; preview audio is stored temporarily in the application cache.
+
+Reports are especially useful when they show that Sonic can:
+
+- delete or overwrite a file that is not the exact recorded Library audio or
+  matching sidecar;
+- follow a symbolic link, junction, mount point, reparse point, or raw Windows
+  device path during intake, recovery, preview cleanup, publication, or
+  uninstall;
+- escape a selected output folder or the scoped preview cache;
+- publish only one half of an audio/sidecar pair without safe recovery;
+- expose private URLs, local source paths, usernames, or output paths in an
+  exported report advertised as redacted;
+- accept stale queue revisions that reorder or modify another state; or
+- execute user-controlled text as a shell command or arbitrary FFmpeg option.
+
+Do not attach a real Sonic database, media sidecar, diagnostic export, or audio
+file to a public report. Create a minimal synthetic reproduction and redact
+identifiers before sharing it through the private advisory.

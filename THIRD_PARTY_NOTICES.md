@@ -1,7 +1,7 @@
 # Third-party notices
 
 This notice covers the principal third-party materials used by **Sonic
-v0.1.4 for Windows x64**. Sonic's original code is proprietary under the root
+v0.2.0 for Windows x64**. Sonic's original code is proprietary under the root
 [LICENSE](LICENSE). Each third-party component remains governed by its own
 license.
 
@@ -13,7 +13,7 @@ also include CycloneDX SBOMs and generated dependency notices.
 
 ## What the Sonic installer contains
 
-The v0.1.4 installer contains these independently launched tools. None is
+The v0.2.0 installer contains these independently launched tools. None is
 linked into Sonic's proprietary Rust executable.
 
 | Component | Exact artifact | SHA-256 | License |
@@ -66,13 +66,14 @@ artifacts and the source/license references recorded by Sonic.
 
 ## Code and assets incorporated into Sonic
 
-| Component | Version in v0.1.4 | License | Source |
+| Component | Version in v0.2.0 | License | Source |
 | --- | --- | --- | --- |
 | Tauri runtime and JavaScript API | Rust `tauri` 2.11.5; `@tauri-apps/api` 2.11.1 | MIT or Apache-2.0; Sonic uses the MIT option | [Tauri source](https://github.com/tauri-apps/tauri/tree/tauri-v2.11.5) |
 | Tauri first-party plugins | dialog 2.7.1, opener 2.5.4, shell 2.3.5 | MIT or Apache-2.0; Sonic uses the MIT option | [plugins workspace](https://github.com/tauri-apps/plugins-workspace) |
 | React and React DOM | 19.2.7 | MIT | [React source](https://github.com/facebook/react/tree/v19.2.7) |
 | Phosphor Icons for React | 2.1.10 | MIT | [Phosphor source](https://github.com/phosphor-icons/react/tree/v2.1.10) |
 | Barlow Condensed via Fontsource | 5.2.8 | SIL Open Font License 1.1 | [exact Fontsource files](https://github.com/fontsource/font-files/tree/40ecb0c337fd649924783a87783dc2e6639bb6f2/fonts/google/barlow-condensed) |
+| rusqlite and bundled SQLite | rusqlite 0.39.0 / libsqlite3-sys 0.37.0 | rusqlite: MIT; SQLite: public domain | [rusqlite source](https://github.com/rusqlite/rusqlite/tree/rusqlite-v0.39.0), [SQLite copyright](https://www.sqlite.org/copyright.html) |
 
 The native executable also contains crates resolved by
 `src-tauri/Cargo.lock`; the webview bundle contains npm runtime packages
@@ -94,7 +95,7 @@ use in the release pipeline.
 
 ## Included notice files
 
-An official v0.1.4 release includes or installs:
+An official v0.2.0 release includes or installs:
 
 - Sonic's proprietary `LICENSE`;
 - this `THIRD_PARTY_NOTICES.md`;

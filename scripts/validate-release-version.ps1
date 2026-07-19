@@ -138,7 +138,7 @@ if (-not [string]::IsNullOrWhiteSpace($ExpectedTag)) {
   $tagPattern = '^v(?<version>' + $semverPattern.TrimStart('^').TrimEnd('$') + ')$'
   $tagMatch = [regex]::Match($ExpectedTag, $tagPattern)
   if (-not $tagMatch.Success) {
-    throw "Release tag '$ExpectedTag' must be an exact semantic version prefixed with 'v' (for example, v0.1.4)."
+    throw "Release tag '$ExpectedTag' must be an exact semantic version prefixed with 'v' (for example, v0.2.0)."
   }
   $tagVersion = $tagMatch.Groups['version'].Value
   if ($tagVersion -cne $canonicalVersion) {

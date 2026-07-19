@@ -1,7 +1,7 @@
 yt-dlp zipimport distribution license notices
 ==============================================
 
-Sonic v0.1.4 includes the platform-independent yt-dlp zipimport artifact from
+Sonic v0.2.0 includes the platform-independent yt-dlp zipimport artifact from
 yt-dlp release 2026.07.04. It does not include yt-dlp's GPL-covered
 PyInstaller executable. Upstream identifies this zipimport artifact as yt-dlp
 under the Unlicense with embedded code from Meriyah (ISC) and Astring (MIT).

@@ -1,0 +1,46 @@
+{
+  "paused": true,
+  "revision": 7,
+  "activeCount": 0,
+  "queuedCount": 2,
+  "jobs": [
+    {
+      "id": "job-b",
+      "state": "queued",
+      "queuePosition": 1,
+      "revision": 3,
+      "source": { "kind": "localFile", "path": "C:\\Music\\Second.wav" },
+      "title": "Second",
+      "artist": null,
+      "presetId": "wav48000S24",
+      "progress": { "percent": null, "downloadedBytes": null, "totalBytes": null, "speedBytesPerSecond": null, "etaSeconds": null, "message": "Waiting" },
+      "outputPath": null,
+      "sidecarPath": null,
+      "errorCode": null,
+      "errorMessage": null,
+      "attempt": 0,
+      "createdAtMs": 1784304002000,
+      "startedAtMs": null,
+      "finishedAtMs": null
+    },
+    {
+      "id": "job-a",
+      "state": "failed",
+      "queuePosition": 0,
+      "revision": 4,
+      "source": { "kind": "youtube", "url": "https://www.youtube.com/watch?v=fixture" },
+      "title": "First",
+      "artist": "Producer",
+      "presetId": "mp3Cbr320",
+      "progress": { "percent": 38, "downloadedBytes": 3800, "totalBytes": 10000, "speedBytesPerSecond": null, "etaSeconds": null, "message": "Interrupted" },
+      "outputPath": null,
+      "sidecarPath": null,
+      "errorCode": "processFailed",
+      "errorMessage": "Fixture failure",
+      "attempt": 1,
+      "createdAtMs": 1784304001000,
+      "startedAtMs": 1784304001500,
+      "finishedAtMs": 1784304001900
+    }
+  ]
+}

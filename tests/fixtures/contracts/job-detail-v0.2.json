@@ -1,0 +1,116 @@
+{
+  "id": "persisted-job-1",
+  "clientItemId": "client-persisted-1",
+  "state": "queued",
+  "queuePosition": 0,
+  "revision": 12,
+  "source": {
+    "kind": "localFile",
+    "path": "C:\\Music\\Persisted Night Shift.wav"
+  },
+  "title": "Persisted Night Shift",
+  "artist": "Eternia",
+  "presetId": "wav48000S24",
+  "progress": {
+    "percent": null,
+    "downloadedBytes": null,
+    "totalBytes": null,
+    "speedBytesPerSecond": null,
+    "etaSeconds": null,
+    "message": "Waiting after restart"
+  },
+  "outputPath": null,
+  "sidecarPath": null,
+  "errorCode": null,
+  "errorMessage": null,
+  "attempt": 0,
+  "createdAtMs": 1784383200000,
+  "startedAtMs": null,
+  "finishedAtMs": null,
+  "request": {
+    "clientItemId": "client-persisted-1",
+    "source": {
+      "kind": "localFile",
+      "path": "C:\\Music\\Persisted Night Shift.wav"
+    },
+    "expectedFingerprint": "sha256:persisted-night-shift",
+    "inspection": {
+      "id": "local:persisted-night-shift",
+      "source": {
+        "kind": "localFile",
+        "path": "C:\\Music\\Persisted Night Shift.wav"
+      },
+      "sourceFingerprint": "sha256:persisted-night-shift",
+      "title": "Persisted Night Shift",
+      "artist": "Eternia",
+      "description": null,
+      "thumbnailUrl": null,
+      "webpageUrl": null,
+      "isLive": false,
+      "audio": {
+        "container": "wav",
+        "codec": "pcm_s24le",
+        "sampleRateHz": 48000,
+        "channels": 2,
+        "bitDepth": 24,
+        "durationMs": 173250,
+        "fileSizeBytes": 49824000
+      },
+      "declaredMetadata": {
+        "bpm": null,
+        "alternateBpms": [],
+        "key": null,
+        "camelot": null,
+        "detuneCents": null,
+        "tuningHz": null,
+        "confidence": 0,
+        "matches": [],
+        "warnings": []
+      },
+      "embeddedMetadata": {
+        "bpm": 146,
+        "alternateBpms": [73],
+        "key": "D minor",
+        "camelot": "7A",
+        "detuneCents": 12.5,
+        "tuningHz": 442,
+        "confidence": 0.91,
+        "matches": [],
+        "warnings": []
+      },
+      "suggestedMetadata": {
+        "bpm": 146,
+        "alternateBpms": [73],
+        "key": "D minor",
+        "camelot": "7A",
+        "detuneCents": 12.5,
+        "tuningHz": 442,
+        "confidence": 0.91,
+        "matches": [],
+        "warnings": []
+      },
+      "warnings": []
+    },
+    "metadata": {
+      "title": "Persisted Night Shift (Final)",
+      "artist": "Eternia Studios",
+      "bpm": 146,
+      "alternateBpms": [73],
+      "key": "D minor",
+      "camelot": "7A",
+      "detuneCents": 12.5,
+      "tuningHz": 442,
+      "evidence": [],
+      "warnings": []
+    },
+    "export": {
+      "presetId": "wav48000S24",
+      "channelMode": "mono",
+      "normalizeLufs": -14,
+      "writeEmbeddedTags": false
+    },
+    "outputDirectory": "C:\\Exports\\Recovered Session",
+    "filenameTemplate": "{producer} - {title} - {bpm} BPM - {key}{detune}"
+  },
+  "workingDirectory": "C:\\Users\\Producer\\AppData\\Local\\sonic\\jobs\\persisted-job-1"
+}

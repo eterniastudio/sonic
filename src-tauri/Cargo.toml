@@ -1,6 +1,6 @@
 [package]
 name = "sonic"
-version = "0.1.4"
+version = "0.2.0"
 description = "Sonic - a local media intake and music metadata companion for beat producers"
 authors = ["Eternia Studios"]
 license-file = "../LICENSE"
@@ -21,7 +21,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
@@ -31,3 +31,8 @@ regex = "1"
 url = "2"
 uuid = { version = "1", features = ["v4"] }
 sha2 = "=0.10.9"
+thiserror = "2"
+rusqlite = { version = "0.39.0", features = ["bundled", "serde_json"] }
+tokio = { version = "1", features = ["sync", "time"] }
+fs2 = "0.4"
+time = { version = "0.3", features = ["formatting"] }

@@ -64,6 +64,9 @@ jobs:
       - name: Audit JavaScript dependencies
         run: npm audit --audit-level=high
 
+      - name: Frontend unit, contract, and accessibility tests
+        run: npm run test:coverage
+
       - name: Fetch and verify pinned media sidecars
         run: npm run tools:fetch
 
@@ -261,7 +264,7 @@ jobs:
           > [!WARNING]
           > **Unsigned Windows release.** This installer is not Authenticode-signed, so Windows SmartScreen may warn before installation. Verify `SHA256SUMS.txt` and the GitHub artifact attestation before running it.
 
-          This release passed version consistency, dependency audits, TypeScript/build checks, Rust formatting, Clippy with warnings denied, Rust tests, packaged sidecar validation, icon checks, application startup, and silent install/uninstall cleanup on a clean Windows runner.
+          This release passed version consistency, dependency audits, frontend unit/contract/accessibility tests, TypeScript/build checks, Rust formatting, Clippy with warnings denied, Rust tests, packaged sidecar validation, icon checks, application startup, and silent install/uninstall cleanup on a clean Windows runner.
 
           The installer includes pinned yt-dlp and CPython components. Deno and FFmpeg are not redistributed by this release; Sonic offers an explicit one-click setup that downloads their pinned artifacts directly from the upstream GitHub releases and verifies every file before use.
 

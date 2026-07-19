@@ -64,6 +64,18 @@ jobs:
       - name: Audit JavaScript dependencies
         run: npm audit --audit-level=high
 
+      - name: Frontend unit, contract, and accessibility tests
+        run: npm run test:coverage
+
+      - name: Upload frontend coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: Sonic-frontend-coverage-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: artifacts/coverage/frontend
+
       - name: Fetch and verify pinned media sidecars
         run: npm run tools:fetch
 

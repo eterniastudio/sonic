@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Sonic",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "identifier": "studio.eternia.sonic",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -13,17 +13,21 @@
     "windows": [
       {
         "label": "main",
-        "title": "Sonic - Beat Intake",
-        "width": 1180,
-        "height": 760,
-        "minWidth": 900,
-        "minHeight": 650,
+        "title": "Sonic - Producer Workstation",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 960,
+        "minHeight": 680,
         "center": true,
         "resizable": true
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data: https://i.ytimg.com https://*.ytimg.com https://yt3.ggpht.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:"
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data: https://i.ytimg.com https://*.ytimg.com https://yt3.ggpht.com; media-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; font-src 'self' data:",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPCACHE/previews/**"]
+      }
     }
   },
   "bundle": {
@@ -50,8 +54,8 @@
       "binaries/python-runtime/yt-dlp": "yt-dlp",
       "binaries/versions.json": "versions.json"
     },
-    "shortDescription": "A local media intake and metadata tool for producers.",
-    "longDescription": "Sonic downloads authorized beat references locally and extracts BPM, musical key, and tuning metadata for producers.",
+    "shortDescription": "A local-first producer intake and export workstation.",
+    "longDescription": "Sonic organizes authorized media and local audio into a producer-ready queue with editable BPM, musical key, tuning metadata, export recipes, and a searchable local library.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

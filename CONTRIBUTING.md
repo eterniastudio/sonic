@@ -54,11 +54,13 @@ Install and validate the project:
 ```powershell
 npm ci
 npm run tools:fetch
+npm run test:coverage
 npm run check
 npm run build
 cargo fmt --manifest-path src-tauri/Cargo.toml --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
-cargo test --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml --all-features
+cargo audit --file src-tauri/Cargo.lock
 ```
 
 Run the desktop application with:
@@ -88,6 +90,27 @@ binaries, build output, and diagnostic logs out of commits.
 7. Update documentation and third-party notices when behavior, dependencies,
    packaging, or distribution changes.
 8. Ensure every required local check passes before requesting review.
+
+## v0.2 architecture boundaries
+
+- `src/app` owns renderer state, reconciliation, and lifecycle cleanup.
+- `src/domain` contains UI-independent TypeScript models and formatting.
+- `src/features` owns the Session, Inspector, Library, Settings, and Preview
+  Transport surfaces.
+- `src/services` is the only frontend layer that knows native IPC wire shapes.
+  New Rust fields require normalizer and checked-in contract-fixture coverage.
+- `src-tauri/src/commands.rs` validates and coordinates IPC requests; it should
+  not become a second job runner.
+- `acquisition.rs`, `jobs.rs`, `filesystem.rs`, `presets.rs`, `preview.rs`,
+  `sidecar.rs`, `storage.rs`, and `tools.rs` own their corresponding native
+  policies. Keep user-controlled paths and process arguments inside this Rust
+  trust boundary.
+
+Queue events must remain compact summaries. Retrieve full persisted job
+requests explicitly rather than attaching descriptions, evidence, and paths to
+every progress event. Library deletion and recovery changes require adversarial
+tests for replaced files, reparse points, partial publication, and stale
+revisions.
 
 ## Dependency and bundled-tool changes
 

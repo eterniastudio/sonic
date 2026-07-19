@@ -1,0 +1,77 @@
+{
+  "appVersion": "0.2.0",
+  "dbSchemaVersion": 1,
+  "settings": {
+    "revision": 3,
+    "settings": {
+      "defaultOutputDirectory": "C:\\Exports\\Sonic",
+      "filenameTemplate": "{title} - {bpm} BPM - {key}",
+      "defaultPresetId": "mp3Cbr320",
+      "maxConcurrentJobs": 1,
+      "historyEnabled": true,
+      "writeEmbeddedTags": true,
+      "includeSourcePathInSidecar": false,
+      "maxDurationMinutes": 30,
+      "maxInputBytes": 2147483648
+    }
+  },
+  "queue": {
+    "paused": true,
+    "revision": 7,
+    "activeCount": 0,
+    "queuedCount": 0,
+    "jobs": []
+  },
+  "dependencyStatus": {
+    "ready": true,
+    "dependencies": [
+      { "name": "python", "available": true, "version": "3.13.14", "error": null },
+      { "name": "ffmpeg", "available": true, "version": "N-125365", "error": null }
+    ]
+  },
+  "recoveryReport": {
+    "interruptedJobs": 0,
+    "recoveredJobs": 0,
+    "cleanedWorkspaces": 1,
+    "warnings": []
+  },
+  "recentLibrary": [
+    {
+      "id": "library-1",
+      "jobId": "job-complete",
+      "source": { "kind": "localFile", "path": "C:\\Music\\Night Shift.wav" },
+      "title": "Night Shift",
+      "artist": "Eternia",
+      "thumbnailUrl": null,
+      "bpm": 144,
+      "alternateBpms": [72],
+      "key": "F# minor",
+      "camelot": "11A",
+      "detuneCents": -31.8,
+      "tuningHz": 432,
+      "presetId": "wav48000S24",
+      "format": "wav",
+      "codec": "pcm_s24le",
+      "durationMs": 173250,
+      "sampleRateHz": 48000,
+      "channels": 2,
+      "audioPath": "C:\\Exports\\Sonic\\Night Shift.wav",
+      "sidecarPath": "C:\\Exports\\Sonic\\Night Shift.sonic.json",
+      "fileSizeBytes": 49824000,
+      "sha256": "fixture-output",
+      "missing": false,
+      "createdAtMs": 1784304000000,
+      "updatedAtMs": 1784304000000
+    }
+  ],
+  "exportPresets": [
+    {
+      "id": "mp3Cbr320",
+      "label": "MP3 320 kbps",
+      "description": "Universal high-bitrate MP3",
+      "extension": "mp3",
+      "lossy": true,
+      "supportsEmbeddedTags": true
+    }
+  ]
+}

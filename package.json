@@ -1,8 +1,8 @@
 {
   "name": "sonic",
   "private": true,
-  "version": "0.1.4",
-  "description": "Local media intake and music metadata companion for beat producers",
+  "version": "0.2.0",
+  "description": "Local-first intake, metadata, export, and library workstation for beat producers",
   "author": "Eternia Studios",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://github.com/eterniastudio/sonic",
@@ -15,6 +15,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "notices:npm": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-npm-notices.ps1",
     "notices:rust": "cargo fetch --locked --manifest-path src-tauri/Cargo.toml && cargo about generate --frozen --fail --all-features --manifest-path src-tauri/Cargo.toml --config about.toml --output-file artifacts/licenses/SONIC-RUST-THIRD-PARTY-LICENSES.html scripts/cargo-about.hbs",
     "notices:generate": "npm run notices:npm && npm run notices:rust",
@@ -35,10 +38,18 @@
   "devDependencies": {
     "@cyclonedx/cyclonedx-npm": "6.0.0",
     "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.1",
+    "@types/node": "22.20.1",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "@vitest/coverage-v8": "4.1.10",
+    "axe-core": "4.12.1",
+    "jsdom": "29.1.1",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "4.1.10"
   }
 }
