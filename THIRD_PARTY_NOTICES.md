@@ -69,7 +69,7 @@ artifacts and the source/license references recorded by Sonic.
 | Component | Version in v0.2.0 | License | Source |
 | --- | --- | --- | --- |
 | Tauri runtime and JavaScript API | Rust `tauri` 2.11.5; `@tauri-apps/api` 2.11.1 | MIT or Apache-2.0; Sonic uses the MIT option | [Tauri source](https://github.com/tauri-apps/tauri/tree/tauri-v2.11.5) |
-| Tauri first-party plugins | dialog 2.7.1, opener 2.5.4, shell 2.3.5 | MIT or Apache-2.0; Sonic uses the MIT option | [plugins workspace](https://github.com/tauri-apps/plugins-workspace) |
+| Tauri first-party plugins | dialog 2.7.1, opener 2.5.4, shell 2.3.5, process 2.3.1, updater 2.10.1 | MIT or Apache-2.0; Sonic uses the MIT option | [plugins workspace](https://github.com/tauri-apps/plugins-workspace) |
 | React and React DOM | 19.2.7 | MIT | [React source](https://github.com/facebook/react/tree/v19.2.7) |
 | Phosphor Icons for React | 2.1.10 | MIT | [Phosphor source](https://github.com/phosphor-icons/react/tree/v2.1.10) |
 | Barlow Condensed via Fontsource | 5.2.8 | SIL Open Font License 1.1 | [exact Fontsource files](https://github.com/fontsource/font-files/tree/40ecb0c337fd649924783a87783dc2e6639bb6f2/fonts/google/barlow-condensed) |

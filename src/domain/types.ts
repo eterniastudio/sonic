@@ -283,6 +283,27 @@ export type PreviewAsset = {
 
 export type BridgeMode = "native" | "preview";
 
+export type UpdaterPhase =
+  | "idle"
+  | "checking"
+  | "available"
+  | "downloading"
+  | "installing"
+  | "upToDate"
+  | "unavailable"
+  | "error";
+
+export type UpdaterState = {
+  phase: UpdaterPhase;
+  availableVersion?: string;
+  releaseDate?: string;
+  releaseNotes?: string;
+  downloadedBytes: number;
+  totalBytes?: number;
+  lastCheckedAt?: string;
+  error?: string;
+};
+
 export type LibraryFilters = {
   format: string;
   key: string;

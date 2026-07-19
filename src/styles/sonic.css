@@ -1610,6 +1610,94 @@ kbd {
 .status-good { color: var(--success); }
 .status-warning { color: var(--warning); }
 
+.update-section {
+  position: relative;
+  overflow: hidden;
+}
+
+.update-section::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255, 59, 56, 0.82), transparent);
+  content: "";
+  opacity: 0.5;
+}
+
+.update-section.is-available {
+  border-color: rgba(255, 59, 56, 0.38);
+  background: linear-gradient(145deg, rgba(255, 59, 56, 0.08), var(--surface-1) 46%);
+}
+
+.update-icon { color: var(--signal); }
+
+.update-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.update-copy > p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.update-copy details {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.update-copy summary {
+  cursor: pointer;
+  color: var(--text-2);
+  font-weight: 700;
+}
+
+.update-copy details p {
+  max-height: 120px;
+  margin: 8px 0 0;
+  overflow: auto;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.update-progress {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.update-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff3b38, #ff6b5f);
+  box-shadow: 0 0 14px rgba(255, 59, 56, 0.3);
+  transition: width 180ms ease;
+}
+
+.update-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: var(--warning);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.update-error svg { flex: 0 0 auto; margin-top: 1px; }
+
+.update-actions button:only-child { flex: 0 1 132px; }
+
 .dependency-list {
   overflow: hidden;
   border: 1px solid var(--line);

@@ -62,6 +62,21 @@ The exact runtime tool versions are recorded in
 licenses and sources are recorded in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
+## Update trust
+
+Sonic checks an HTTPS static manifest attached to the latest release under the
+`eterniastudio/sonic` repository. An update is installed only after the Tauri
+updater validates its signature against the public key embedded in the
+application. The matching private key is stored outside source control and in
+the repository's protected Actions secrets.
+
+Reports are especially important if update metadata can redirect Sonic to an
+untrusted host, signature verification can be bypassed, a downgrade occurs
+without explicit policy, or private signing material appears in source,
+artifacts, logs, caches, or diagnostics. The updater signature is separate
+from Authenticode; Windows SmartScreen may still warn for installers without a
+commercial code-signing certificate.
+
 ## Local data and destructive actions
 
 Sonic v0.2 keeps settings, queue requests/events, and optional Beat Library

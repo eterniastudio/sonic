@@ -32,6 +32,8 @@ changes that require migration notes.
   tempo.
 - Settings and redacted diagnostics for engine, database, limits, recovery,
   and local workspace defaults.
+- Automatic GitHub Release checks with an explicit Settings prompt, download
+  progress, signed installer verification, passive installation, and restart.
 - Pinned yt-dlp, CPython, Deno, FFmpeg, and ffprobe artifact manifest with a
   verified first-run media-engine installer.
 - License notices, generated dependency reports, SBOMs, release checksums,
@@ -66,6 +68,8 @@ changes that require migration notes.
   builds.
 - Adds a hash-verified, bounded live media-engine E2E check using an authorized
   NASA SVS source and ffprobe tag readback.
+- Signs updater artifacts in tag CI, publishes static `latest.json` metadata,
+  and keeps the private signing key in GitHub Actions secrets.
 - Refuses installer smoke testing before mutation when any Sonic install,
   process, startup entry, shortcut, application data, or stale smoke root is
   already present, then verifies owned-resource cleanup after the run.

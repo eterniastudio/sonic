@@ -64,6 +64,9 @@ jobs:
       - name: Validate installer smoke safety contract
         run: npm run installer:smoke:verify
 
+      - name: Validate updater manifest contract
+        run: npm run updater:manifest:verify
+
       - name: Audit JavaScript dependencies
         run: npm audit --audit-level=high
 
@@ -135,7 +138,23 @@ jobs:
             --output-file artifacts/licenses/SONIC-RUST-THIRD-PARTY-LICENSES.html `
             scripts/cargo-about.hbs
 
+      - name: Require updater signing key
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw 'TAURI_SIGNING_PRIVATE_KEY is required to publish verifiable updates.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)) {
+            throw 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD is required to unlock the updater signing key.'
+          }
+
       - name: Build Sonic NSIS installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri build
 
       - name: Smoke test freshly built installer
@@ -156,6 +175,33 @@ jobs:
             -ExpectedVersion $env:EXPECTED_VERSION `
             -OperationTimeoutSeconds 600
 
+      - name: Generate signed updater metadata
+        env:
+          EXPECTED_VERSION: ${{ steps.release_version.outputs.version }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: pwsh
+        run: |
+          $releaseDirectory = "src-tauri/target/release/bundle/nsis"
+          $installers = @(Get-ChildItem `
+            -LiteralPath $releaseDirectory `
+            -Filter "Sonic_*_x64-setup.exe" `
+            -File)
+          if ($installers.Count -ne 1) {
+            throw "Expected exactly one Sonic updater installer; found $($installers.Count)."
+          }
+          $signature = "$($installers[0].FullName).sig"
+          if (-not (Test-Path -LiteralPath $signature -PathType Leaf)) {
+            throw "Tauri did not generate the required updater signature: $signature"
+          }
+          $publicationDate = (git show -s --format=%cI HEAD).Trim()
+          ./scripts/generate-updater-manifest.ps1 `
+            -Version $env:EXPECTED_VERSION `
+            -Tag $env:RELEASE_TAG `
+            -InstallerPath $installers[0].FullName `
+            -SignaturePath $signature `
+            -OutputPath "$releaseDirectory/latest.json" `
+            -PubDate $publicationDate
+
       - name: Generate release checksums
         shell: pwsh
         run: |
@@ -171,6 +217,8 @@ jobs:
 
           $releaseFiles = @(
             $installer
+            Get-Item -LiteralPath "$($installer.FullName).sig"
+            Get-Item -LiteralPath "$releaseDirectory/latest.json"
             Get-Item -LiteralPath "artifacts/sbom/sonic-npm.cdx.json"
             Get-Item -LiteralPath "artifacts/sbom/sonic-cargo.cdx.json"
             Get-Item -LiteralPath "artifacts/sbom/THIRD_PARTY_LICENSE_REPORT.json"
@@ -194,6 +242,8 @@ jobs:
           if-no-files-found: error
           path: |
             src-tauri/target/release/bundle/nsis/Sonic_*_x64-setup.exe
+            src-tauri/target/release/bundle/nsis/Sonic_*_x64-setup.exe.sig
+            src-tauri/target/release/bundle/nsis/latest.json
             src-tauri/target/release/bundle/nsis/SHA256SUMS.txt
             artifacts/sbom/*.json
             artifacts/licenses/*
@@ -226,6 +276,8 @@ jobs:
         with:
           subject-path: |
             release-candidate/src-tauri/target/release/bundle/nsis/Sonic_*_x64-setup.exe
+            release-candidate/src-tauri/target/release/bundle/nsis/Sonic_*_x64-setup.exe.sig
+            release-candidate/src-tauri/target/release/bundle/nsis/latest.json
             release-candidate/src-tauri/target/release/bundle/nsis/SHA256SUMS.txt
             release-candidate/artifacts/sbom/*.json
             release-candidate/artifacts/licenses/*
@@ -254,6 +306,8 @@ jobs:
           $installer = $installers[0]
           $assets = @(
             $installer.FullName
+            (Resolve-Path "$($installer.FullName).sig").Path
+            (Resolve-Path "$($root.Path)/src-tauri/target/release/bundle/nsis/latest.json").Path
             (Resolve-Path "$($root.Path)/src-tauri/target/release/bundle/nsis/SHA256SUMS.txt").Path
             (Resolve-Path "$($root.Path)/artifacts/sbom/sonic-npm.cdx.json").Path
             (Resolve-Path "$($root.Path)/artifacts/sbom/sonic-cargo.cdx.json").Path
@@ -268,9 +322,9 @@ jobs:
           $notesPath = Join-Path $env:RUNNER_TEMP "sonic-release-notes.md"
           @'
           > [!WARNING]
-          > **Unsigned Windows release.** This installer is not Authenticode-signed, so Windows SmartScreen may warn before installation. Verify `SHA256SUMS.txt` and the GitHub artifact attestation before running it.
+          > **No Authenticode certificate.** Windows SmartScreen may warn before installation. Sonic's in-app updater separately verifies every update with the embedded Tauri signing key. You can also verify `SHA256SUMS.txt` and the GitHub artifact attestation.
 
-          This release passed version consistency, dependency audits, frontend unit/contract/accessibility tests, TypeScript/build checks, Rust formatting, Clippy with warnings denied, Rust tests, packaged sidecar validation, icon checks, application startup, and silent install/uninstall cleanup on a clean Windows runner.
+          This release passed version consistency, dependency audits, frontend unit/contract/accessibility tests, TypeScript/build checks, Rust formatting, Clippy with warnings denied, Rust tests, packaged sidecar validation, signed updater metadata validation, icon checks, application startup, and silent install/uninstall cleanup on a clean Windows runner.
 
           The installer includes pinned yt-dlp and CPython components. Deno and FFmpeg are not redistributed by this release; Sonic offers an explicit one-click setup that downloads their pinned artifacts directly from the upstream GitHub releases and verifies every file before use.
 

@@ -33,6 +33,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
     "publisher": "Eternia Studios",
     "copyright": "Copyright (c) 2026 Eternia Studios",
     "homepage": "https://github.com/eterniastudio/sonic",
@@ -68,6 +69,17 @@
         "installerHooks": "windows/installer-hooks.nsh",
         "installerIcon": "icons/icon.ico",
         "uninstallerIcon": "icons/icon.ico"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZDNjREMkExNjUyRTU0MTEKUldRUlZDNWxvZEprL0g2RHJHcE92UmRMWFZnb1dmRytXZGFROVJwVlZYamVEZFB6blRoQjYxb2sK",
+      "endpoints": [
+        "https://github.com/eterniastudio/sonic/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
       }
     }
   }

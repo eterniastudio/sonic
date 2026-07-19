@@ -38,6 +38,7 @@ workstation:
   half-time/double-time correction;
 - startup recovery for interrupted work and no-clobber paired publication;
 - engine, database, recovery, and redacted-support diagnostics;
+- signed GitHub Release update checks with explicit download/install consent;
 - a modular React/Rust architecture with frontend contract, reducer,
   accessibility, and coverage tests.
 
@@ -199,12 +200,14 @@ Download the latest Windows x64 installer from
 
 > [!WARNING]
 > The current installer is not Authenticode-signed, so Windows SmartScreen may
-> warn before installation. Verify `SHA256SUMS.txt` and the GitHub artifact
-> attestation before running it.
+> warn before installation. Sonic's in-app updater separately verifies every
+> update with its embedded Tauri public key. You can also verify
+> `SHA256SUMS.txt` and the GitHub artifact attestation before running it.
 
 Each release includes:
 
 - `Sonic_<version>_x64-setup.exe`, the NSIS installer;
+- `Sonic_<version>_x64-setup.exe.sig` and `latest.json` for signed updates;
 - `SHA256SUMS.txt` for every release attachment;
 - npm and Cargo CycloneDX SBOMs;
 - generated npm and Rust dependency-license reports;
@@ -214,6 +217,23 @@ Each release includes:
 
 The installer contains pinned yt-dlp and CPython components. Node.js, Rust,
 Python, yt-dlp, Deno, and FFmpeg do not need to be installed globally.
+
+### Automatic updates
+
+Installed copies check the latest Eternia Studios GitHub Release shortly after
+startup. Sonic only reports that an update is available; downloading and
+installation require an explicit click in **Settings → Software update**.
+Every updater artifact is verified against the public key embedded in the app,
+and Windows uses Tauri's recommended passive installation mode. Sonic closes
+while the verified update is installed and then reopens.
+
+The updater endpoint is
+`https://github.com/eterniastudio/sonic/releases/latest/download/latest.json`.
+Release CI signs the NSIS artifact with the repository's protected
+`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets,
+then publishes the signature plus static metadata. Neither secret is committed.
+Versions installed before this feature need one final manual installer upgrade
+before they can update in-app.
 
 ### First-run media engine setup
 
@@ -282,6 +302,8 @@ verification.
 - The local SQLite database uses a schema version, application ID, and WAL.
 - Diagnostic exports contain versions, health, and aggregate state, with
   source URLs and personal paths redacted.
+- Update metadata comes only from the configured HTTPS Eternia Studios release
+  endpoint, and the downloaded installer must pass Tauri signature validation.
 - Sonic includes no product analytics or hosted Sonic conversion backend.
 
 Sonic is local-first, not offline: URL inspection/acquisition and explicit
@@ -373,6 +395,7 @@ Run the same principal checks as CI:
 ./scripts/validate-release-version.ps1
 npm audit --audit-level=high
 npm run installer:smoke:verify
+npm run updater:manifest:verify
 npm run test:coverage
 npm run check
 npm run build
@@ -401,9 +424,9 @@ assets are transferred. The v0.2 production baseline and enforced ceilings are:
 
 | Payload | Baseline raw | Raw budget | Baseline gzip | Gzip budget |
 | --- | ---: | ---: | ---: | ---: |
-| JavaScript | 415,100 B | 440,000 B | 116,301 B | 125,000 B |
-| CSS | 39,489 B | 42,000 B | 7,841 B | 8,500 B |
-| All static files (9) | 539,764 B | 570,000 B | 207,944 B | 220,000 B |
+| JavaScript | 426,482 B | 440,000 B | 119,949 B | 125,000 B |
+| CSS | 40,814 B | 42,000 B | 8,110 B | 8,500 B |
+| All static files (11) | 552,471 B | 570,000 B | 211,860 B | 220,000 B |
 
 Both pull-request CI and tagged-release CI run this gate immediately after the
 Vite build. Update a ceiling only with a measured, reviewed reason; do not raise
@@ -419,8 +442,8 @@ presets, and process/progress helpers.
 Release CI additionally fetches and validates the pinned tools, generates
 license reports and SBOMs, builds the NSIS installer, installs it silently on a
 clean Windows runner, launches the packaged executable, checks packaged tools
-and icons, uninstalls it, verifies cleanup, computes checksums, and attests the
-release artifacts.
+and icons, generates signed updater metadata, uninstalls it, verifies cleanup,
+computes checksums, and attests the release artifacts.
 
 ## Repository layout
 
@@ -458,8 +481,21 @@ git push origin v0.2.0
 ```
 
 The GitHub Actions release job validates, builds, smoke-tests, attests, and
-publishes the installer. Do not create a release from an unreviewed local
-binary.
+publishes the installer, updater signature, and `latest.json`. The repository
+must contain `TAURI_SIGNING_PRIVATE_KEY` and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` Actions secrets matching the public key in
+`src-tauri/tauri.conf.json`. For a signed local bundle, point Tauri at a secure
+key backup and load its password before building:
+
+```powershell
+$env:TAURI_SIGNING_PRIVATE_KEY_PATH = "$HOME\.tauri\sonic-updater.key"
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = Get-Content -Raw "$HOME\.tauri\sonic-updater.password"
+npm run tauri build
+```
+
+Never commit or upload the private key as a normal release asset. Losing it
+prevents future in-app updates for existing installations. Do not create a
+release from an unreviewed local binary.
 
 See [`CHANGELOG.md`](CHANGELOG.md), [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md),
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), and [`LICENSE`](LICENSE)

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { EMPTY_METADATA } from "../domain/defaults";
 import { templateForItem } from "../domain/filename";
 import { queueRemovalMode } from "../domain/queue";
@@ -11,9 +11,15 @@ import type {
   QueueItem,
   SonicSettings,
   SourceInput,
+  UpdaterState,
 } from "../domain/types";
 import { getBridge } from "../services/bridge";
 import type { SonicBridge } from "../services/bridge-types";
+import {
+  checkForSonicUpdate,
+  installSonicUpdate,
+  type SonicUpdate,
+} from "../services/updater";
 import {
   initialState,
   moveQueueItem,
@@ -45,6 +51,7 @@ export type SonicContextValue = {
   selectedJob: QueueItem | null;
   selectedLibraryItem: LibraryItem | null;
   bridgeMode: SonicBridge["mode"];
+  updater: UpdaterState;
   setRoute(route: AppRoute): void;
   selectJob(itemId: string | null): void;
   selectLibraryItem(itemId: string | null): void;
@@ -73,6 +80,8 @@ export type SonicContextValue = {
   refreshDiagnostics(): Promise<void>;
   exportDiagnostics(): Promise<void>;
   prepareEngine(): Promise<void>;
+  checkForUpdates(): Promise<void>;
+  installUpdate(): Promise<void>;
   loadPreview(item: QueueItem | LibraryItem): Promise<void>;
   releasePreview(): Promise<void>;
   setPlaying(playing: boolean): void;
@@ -88,7 +97,13 @@ const SonicContext = createContext<SonicContextValue | null>(null);
 export function SonicProvider({ children }: { children: ReactNode }) {
   const bridge = useMemo(() => getBridge(), []);
   const [state, dispatch] = useReducer(sonicReducer, initialState);
+  const [updater, setUpdater] = useState<UpdaterState>({
+    phase: bridge.mode === "native" ? "idle" : "unavailable",
+    downloadedBytes: 0,
+  });
   const stateRef = useRef(state);
+  const pendingUpdateRef = useRef<SonicUpdate | null>(null);
+  const updateCheckRef = useRef<Promise<void> | null>(null);
   stateRef.current = state;
 
   const setError = useCallback((error: unknown) => {
@@ -283,6 +298,106 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     const asset = stateRef.current.player.asset;
     if (asset) void bridge.releasePreview(asset.id);
   }, [bridge]);
+
+  const checkForUpdates = useCallback(async () => {
+    if (bridge.mode !== "native") {
+      setUpdater({ phase: "unavailable", downloadedBytes: 0 });
+      return;
+    }
+    if (updateCheckRef.current) {
+      await updateCheckRef.current;
+      return;
+    }
+
+    const task = (async () => {
+      setUpdater((current) => ({
+        ...current,
+        phase: "checking",
+        downloadedBytes: 0,
+        totalBytes: undefined,
+        error: undefined,
+      }));
+      try {
+        const update = await checkForSonicUpdate();
+        const previous = pendingUpdateRef.current;
+        pendingUpdateRef.current = update;
+        if (previous && previous !== update) void previous.close();
+        const checkedAt = new Date().toISOString();
+        if (update) {
+          setUpdater({
+            phase: "available",
+            availableVersion: update.version,
+            releaseDate: update.date,
+            releaseNotes: update.body,
+            downloadedBytes: 0,
+            lastCheckedAt: checkedAt,
+          });
+        } else {
+          setUpdater({ phase: "upToDate", downloadedBytes: 0, lastCheckedAt: checkedAt });
+        }
+      } catch (error) {
+        setUpdater((current) => ({
+          ...current,
+          phase: "error",
+          downloadedBytes: 0,
+          totalBytes: undefined,
+          lastCheckedAt: new Date().toISOString(),
+          error: errorMessage(error),
+        }));
+      }
+    })();
+    updateCheckRef.current = task;
+    try {
+      await task;
+    } finally {
+      if (updateCheckRef.current === task) updateCheckRef.current = null;
+    }
+  }, [bridge.mode]);
+
+  const installUpdate = useCallback(async () => {
+    const update = pendingUpdateRef.current;
+    if (!update) {
+      await checkForUpdates();
+      return;
+    }
+
+    let downloadedBytes = 0;
+    let totalBytes: number | undefined;
+    setUpdater((current) => ({ ...current, phase: "downloading", downloadedBytes: 0, error: undefined }));
+    try {
+      await installSonicUpdate(update, (event) => {
+        if (event.event === "Started") {
+          totalBytes = event.data.contentLength;
+          setUpdater((current) => ({ ...current, phase: "downloading", downloadedBytes: 0, totalBytes }));
+        } else if (event.event === "Progress") {
+          downloadedBytes += event.data.chunkLength;
+          setUpdater((current) => ({ ...current, phase: "downloading", downloadedBytes, totalBytes }));
+        } else {
+          setUpdater((current) => ({ ...current, phase: "installing", downloadedBytes, totalBytes }));
+        }
+      });
+    } catch (error) {
+      setUpdater((current) => ({
+        ...current,
+        phase: "error",
+        downloadedBytes,
+        totalBytes,
+        error: errorMessage(error),
+      }));
+    }
+  }, [checkForUpdates]);
+
+  useEffect(() => {
+    if (bridge.mode !== "native" || state.loading) return;
+    const timeout = window.setTimeout(() => void checkForUpdates(), 2_500);
+    return () => window.clearTimeout(timeout);
+  }, [bridge.mode, checkForUpdates, state.loading]);
+
+  useEffect(() => () => {
+    const pending = pendingUpdateRef.current;
+    pendingUpdateRef.current = null;
+    if (pending) void pending.close();
+  }, []);
 
   const updateItem = useCallback((itemId: string, patch: Partial<QueueItem>) => {
     dispatch({ type: "updateItem", itemId, patch });
@@ -593,6 +708,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     selectedJob: selectSelectedJob(state),
     selectedLibraryItem: selectSelectedLibraryItem(state),
     bridgeMode: bridge.mode,
+    updater,
     setRoute: (route) => dispatch({ type: "setRoute", route }),
     selectJob: (itemId) => dispatch({ type: "selectItem", itemId }),
     selectLibraryItem: (itemId) => dispatch({ type: "selectLibraryItem", itemId }),
@@ -621,6 +737,8 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     refreshDiagnostics,
     exportDiagnostics,
     prepareEngine,
+    checkForUpdates,
+    installUpdate,
     loadPreview,
     releasePreview,
     setPlaying: (playing) => dispatch({ type: "playerPlaying", playing }),
@@ -630,11 +748,11 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     dismissError: () => dispatch({ type: "setError", error: null }),
     setShortcutsOpen: (open) => dispatch({ type: "setShortcutsOpen", open }),
   }), [
-    addLocalPaths, addUrls, bridge, cancelItem, chooseOutputDirectory, clearCompleted, enqueueAllReady,
-    enqueueItem, exportDiagnostics, importFiles, loadPreview, moveItem, openSource, prepareEngine,
+    addLocalPaths, addUrls, bridge, cancelItem, checkForUpdates, chooseOutputDirectory, clearCompleted, enqueueAllReady,
+    enqueueItem, exportDiagnostics, importFiles, installUpdate, loadPreview, moveItem, openSource, prepareEngine,
     refreshDiagnostics, refreshFilename, refreshLibrary, releasePreview, removeItem, removeLibraryItem,
     reexportLibraryItem, retryItem, revealPath, saveQueuedItem, saveSettings, setQueuePaused, state,
-    updateItem, updateMetadata,
+    updateItem, updateMetadata, updater,
   ]);
 
   return <SonicContext.Provider value={value}>{children}</SonicContext.Provider>;

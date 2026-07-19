@@ -26,6 +26,7 @@
     "notices:generate": "npm run notices:npm && npm run notices:rust",
     "release:prepare": "npm run build && npm run bundle:budget && npm run notices:generate",
     "tools:fetch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-tools.ps1",
+    "updater:manifest:verify": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-updater-manifest.ps1",
     "preview": "vite preview",
     "tauri": "tauri"
   },
@@ -35,6 +36,8 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-process": "2.3.1",
+    "@tauri-apps/plugin-updater": "2.10.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

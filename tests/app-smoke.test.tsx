@@ -31,6 +31,17 @@ describe("Sonic application shell", () => {
     expect(results.violations).toEqual([]);
   });
 
+  it("keeps native update checks unavailable in the browser preview", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: /^settings$/i }));
+
+    expect(screen.getByRole("heading", { name: /desktop updates/i })).toBeInTheDocument();
+    expect(screen.getByText(/update checks run inside the installed desktop app/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /check now/i })).toBeDisabled();
+  });
+
   it("accepts a source URL and moves into the producer review workflow", async () => {
     const user = userEvent.setup();
     render(<App />);

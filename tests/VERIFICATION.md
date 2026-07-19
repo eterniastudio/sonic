@@ -16,6 +16,7 @@ fixtures and `localStorage`.
 | `queue-actions.test.ts` | Native job lifecycle mapping, queued-job cancellation, terminal removal, Library-backed history retention, and queue-to-Library identity correlation |
 | `state.test.ts` | Reducer hydration, client/native ID correlation, draft preservation, authoritative synchronization, stale-item eviction, selection fallback, pause/retry/reorder transitions, player lifecycle, and presentation actions |
 | `app-smoke.test.tsx` | Semantic application shell, keyboard/user source intake, review transition, and an axe-core accessibility scan (except color contrast, which jsdom cannot compute) |
+| `updater.test.ts` | Bounded update checks, download-progress forwarding, install-before-relaunch ordering, and no relaunch after signature/install failure |
 
 `npm run test:coverage` enforces aggregate V8 coverage thresholds of 80% for
 lines, functions, and statements, and 70% for branches across the reducer,
@@ -27,6 +28,7 @@ coverage artifact for 14 days.
 ```powershell
 npm ci
 npm run installer:smoke:verify
+npm run updater:manifest:verify
 npm run test:coverage
 npm run check
 npm run build
@@ -56,13 +58,17 @@ followed by `npm run bundle:budget`:
 
 | Payload | Files | Measured raw | Raw limit | Measured gzip | Gzip limit |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| JavaScript | 1 | 415,100 B | 440,000 B | 116,301 B | 125,000 B |
-| CSS | 1 | 39,489 B | 42,000 B | 7,841 B | 8,500 B |
-| Complete static output | 9 | 539,764 B | 570,000 B | 207,944 B | 220,000 B |
+| JavaScript | 3 | 426,482 B | 440,000 B | 119,949 B | 125,000 B |
+| CSS | 1 | 40,814 B | 42,000 B | 8,110 B | 8,500 B |
+| Complete static output | 11 | 552,471 B | 570,000 B | 211,860 B | 220,000 B |
 
 The complete-output limit covers HTML, SVG, and local font assets in addition
 to JavaScript and CSS. A missing/empty `dist`, missing JavaScript or CSS output,
 or any limit overage returns a non-zero status.
+
+The two small additional JavaScript chunks are intentional dynamic imports for
+Tauri's updater and process bindings. Browser-preview startup does not execute
+their native APIs.
 
 ## Authorized live media-engine audit
 
