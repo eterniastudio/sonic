@@ -858,7 +858,7 @@ kbd {
 
 .metadata-provenance {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1px;
   margin-bottom: 12px;
   overflow: hidden;
@@ -880,6 +880,10 @@ kbd {
 
 .metadata-provenance > div.is-final {
   background: var(--signal-soft);
+}
+
+.metadata-provenance > div.is-audio-unavailable {
+  background: var(--field);
 }
 
 .metadata-provenance span {
@@ -907,6 +911,13 @@ kbd {
   font-size: 10px;
   font-weight: 600;
   text-align: right;
+}
+
+.metadata-boundary-note {
+  margin: -2px 0 12px;
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .text-field-grid,

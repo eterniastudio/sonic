@@ -12,6 +12,7 @@ pub struct MusicMetadata {
     pub camelot: Option<String>,
     pub detune_cents: Option<f64>,
     pub tuning_hz: Option<f64>,
+    /// Confidence in declared-text or embedded-tag matches, never audio analysis.
     pub confidence: f64,
     pub matches: Vec<MetadataMatch>,
     pub warnings: Vec<String>,

@@ -22,6 +22,11 @@ describe("Sonic application shell", () => {
     expect(await screen.findByRole("button", { name: /sonic session/i })).toBeInTheDocument();
     expect(screen.getByRole("main")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^ready$/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/audio signal/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/not analyzed in v0\.2/i)).toBeInTheDocument();
+    expect(screen.getByText(/does not analyze the audio signal/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /confirm metadata & add to queue/i })).toBeInTheDocument();
+    expect(screen.queryByText(/^\d+% match confidence$/i)).not.toBeInTheDocument();
 
     const results = await axe.run(container, {
       rules: {

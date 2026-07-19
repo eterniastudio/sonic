@@ -74,6 +74,7 @@ export function SourceInspector() {
   const selectedPreset = state.presets.find((preset) => preset.id === item.presetId) ?? state.presets[0];
   const originalOutput = item.presetId === "original";
   const previewAvailable = item.source.kind === "localFile";
+  const hasTextTagMatches = Boolean(inspection?.suggestedMetadata.matches.length);
   const confidence = inspection ? Math.round(inspection.suggestedMetadata.confidence * 100) : 0;
   const customTemplate = item.customTemplate ?? state.settings.filenameTemplate;
 
@@ -98,14 +99,14 @@ export function SourceInspector() {
             {inspection.codec ? <span>{inspection.codec}</span> : null}
             {inspection.audio.sampleRateHz ? <span>{Math.round(inspection.audio.sampleRateHz / 100) / 10} kHz</span> : null}
             {inspection.fileSizeBytes ? <span>{formatBytes(inspection.fileSizeBytes)}</span> : null}
-            <span>{confidence}% match confidence</span>
+            {hasTextTagMatches ? <span>{confidence}% text/tag match confidence</span> : null}
           </div>
         ) : null}
 
         {item.status === "inspecting" ? (
           <div className="inspector-loading" role="status">
             <CircleNotch className="spin" size={19} aria-hidden="true" />
-            <div><strong>Checking the source</strong><span>Reading its title, description, tags, and audio details.</span></div>
+            <div><strong>Checking the source</strong><span>Reading the title, description, file tags, and format details.</span></div>
           </div>
         ) : null}
 
@@ -135,15 +136,19 @@ export function SourceInspector() {
                     camelot: inspection.suggestedMetadata.camelot,
                     tuningHz: inspection.suggestedMetadata.tuningHz,
                   })}
-                >Use suggestions</button>
+                >Reset to text &amp; tag suggestions</button>
               </div>
 
               <div className="metadata-provenance" aria-label="Metadata source comparison">
-                <div><span>From description</span><strong>{metadataSummary(inspection.declaredMetadata)}</strong></div>
-                <div><span>In the file</span><strong>{metadataSummary(inspection.embeddedMetadata)}</strong></div>
-                <div className="is-final"><span>For export</span><strong>{metadataSummary({ bpm: Number(item.metadata.bpm) || undefined, key: item.metadata.key || undefined, detuneCents: Number(item.metadata.detuneCents) || undefined })}</strong></div>
-                <b>{confidence}% match confidence</b>
+                <div><span>Declared text</span><strong>{metadataSummary(inspection.declaredMetadata)}</strong></div>
+                <div><span>Embedded tags</span><strong>{metadataSummary(inspection.embeddedMetadata)}</strong></div>
+                <div className="is-audio-unavailable"><span>Audio signal</span><strong>Not analyzed in v0.2</strong></div>
+                <div className="is-final"><span>Final for export</span><strong>{metadataSummary({ bpm: Number(item.metadata.bpm) || undefined, key: item.metadata.key || undefined, detuneCents: Number(item.metadata.detuneCents) || undefined })}</strong></div>
+                <b>{hasTextTagMatches ? `${confidence}% text/tag match confidence` : "No text or tag matches"}</b>
               </div>
+              <p className="metadata-boundary-note">
+                Sonic v0.2 does not analyze the audio signal. Check or correct the final values before export.
+              </p>
 
               <div className="text-field-grid">
                 <label className="field span-two">
@@ -179,7 +184,7 @@ export function SourceInspector() {
 
               {inspection.suggestedMetadata.alternateBpms.length ? (
                 <div className="alternate-values">
-                  <span>Other BPM matches</span>
+                  <span>Other declared BPM values</span>
                   {inspection.suggestedMetadata.alternateBpms.map((bpm) => (
                     <button type="button" key={bpm} disabled={locked} onClick={() => updateMetadata(item.id, { bpm: bpm.toString() })}>{bpm} BPM</button>
                   ))}
@@ -202,7 +207,7 @@ export function SourceInspector() {
 
               <details className="evidence-disclosure">
                 <summary>
-                  <span><strong>Where these values came from</strong><small>{inspection.suggestedMetadata.matches.length} {inspection.suggestedMetadata.matches.length === 1 ? "match" : "matches"}</small></span>
+                  <span><strong>Text and tag matches</strong><small>{inspection.suggestedMetadata.matches.length} {inspection.suggestedMetadata.matches.length === 1 ? "match" : "matches"}</small></span>
                   <CaretDown size={16} aria-hidden="true" />
                 </summary>
                 <div className="evidence-table">
@@ -212,7 +217,7 @@ export function SourceInspector() {
                       <strong>{match.rawText}</strong>
                       <small>{match.source} · {Math.round(match.confidence * 100)}%</small>
                     </div>
-                  )) : <p>No BPM, key, or tuning details were found. You can enter them above.</p>}
+                  )) : <p>No BPM, key, or tuning values were found in the source text or file tags. Enter them above.</p>}
                 </div>
               </details>
             </section>
@@ -316,7 +321,7 @@ export function SourceInspector() {
         </div>
         {item.status === "review" ? (
           <button className="primary-action" type="button" onClick={() => void enqueueItem(item.id)} disabled={!item.outputDirectory || inspection?.isLive}>
-            <DownloadSimple size={19} weight="bold" aria-hidden="true" /> Add to queue
+            <DownloadSimple size={19} weight="bold" aria-hidden="true" /> Confirm metadata &amp; add to queue
           </button>
         ) : item.status === "queued" ? (
           <button className="primary-action" type="button" onClick={() => void saveQueuedItem(item.id)}>

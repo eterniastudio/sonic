@@ -40,6 +40,8 @@ pub struct SourceInspection {
     pub audio: AudioProperties,
     pub declared_metadata: MusicMetadata,
     pub embedded_metadata: MusicMetadata,
+    /// Evidence-ranked merge of declared text and embedded tags only.
+    /// Sonic v0.2 does not derive these values from the audio signal.
     pub suggested_metadata: MusicMetadata,
     pub warnings: Vec<String>,
 }

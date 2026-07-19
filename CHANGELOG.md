@@ -8,6 +8,10 @@ changes that require migration notes.
 
 ### Fixed
 
+- Made the v0.2 metadata boundary explicit throughout the inspector and
+  documentation: confidence refers to declared-text and embedded-tag matches,
+  audio-signal analysis is not performed, and producers remain responsible for
+  verifying the final export values.
 - Fixed Windows output folders being saved with a `\\?\` canonical prefix and
   then rejected when an export was queued. Existing affected folder settings
   are repaired automatically at startup.

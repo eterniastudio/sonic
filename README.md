@@ -29,11 +29,6 @@
   <sub>Designed and published by <a href="https://github.com/eterniastudio">Eternia Studios</a>, an individual creator account.</sub>
 </div>
 
-> [!NOTE]
-> This branch contains the upcoming **Sonic v0.2 producer workstation**. The
-> latest public installer is currently **v0.1.3**; release links continue to
-> point to that verified public build until v0.2 is tagged.
-
 > [!IMPORTANT]
 > Sonic is for media you own or are authorized to download and process. It
 > does not bypass DRM, authentication, private-video access, geographic
@@ -47,7 +42,7 @@ remember where it went” routine with one focused desktop workspace.
 
 | Intake | Verify | Export | Organize |
 | --- | --- | --- | --- |
-| Add authorized YouTube links or drop local audio. | Compare declared, embedded, suggested, and final metadata. | Choose a fixed producer-ready recipe and safe filename. | Search, audition, reveal, and re-export from the local Beat Library. |
+| Add authorized YouTube links or drop local audio. | Compare source text, embedded tags, parsed suggestions, and your final values. | Choose a fixed producer-ready recipe and safe filename. | Search, audition, reveal, and re-export from the local Beat Library. |
 
 No Sonic account. No subscription. No analytics. No hosted conversion
 backend. Your queue, metadata decisions, exports, and library stay on your
@@ -59,8 +54,9 @@ Windows machine.
 
 ![Sonic Session showing a two-item producer queue and metadata inspector](docs/screenshots/sonic-session.png)
 
-Review source identity, BPM, key, Camelot value, detune, confidence, filename,
-destination, and export recipe without leaving the session.
+Review source identity, BPM, key, Camelot value, detune, text/tag match
+strength, filename, destination, and export recipe without leaving the
+session.
 
 ### Trace every suggestion to its source
 
@@ -90,8 +86,9 @@ reorder pending items, or retry interrupted exports.
 
 1. **Build a session.** Paste one or more authorized video links, pick local
    audio, or drag supported files into Sonic.
-2. **Review the evidence.** Sonic inspects the source and presents declared
-   text, embedded tags, conflicts, confidence, and editable final values.
+2. **Review the evidence.** Sonic reads source text and supported tags, then
+   presents the parsed matches, conflicts, match strength, and editable final
+   values.
 3. **Choose the output.** Select a fixed preset, channel policy, optional LUFS
    target, embedded-tag policy, naming template, and destination.
 4. **Queue the work.** Export one reviewed item or a complete batch with one to
@@ -99,7 +96,7 @@ reorder pending items, or retry interrupted exports.
 5. **Return to the library.** Search, preview, reveal, re-export, remove the
    history record, or explicitly delete verified audio and its sidecar.
 
-## What Sonic understands
+## What Sonic parses
 
 Sonic parses producer-declared musical information from source text,
 filenames, and supported embedded tags.
@@ -116,13 +113,14 @@ The inspector deliberately keeps four concepts separate:
 
 - **Declared** — what the source text says;
 - **Embedded** — what supported container tags say;
-- **Suggested** — Sonic's evidence-ranked interpretation; and
+- **Suggested** — Sonic's rule-based merge of parsed declarations and
+  embedded tags; and
 - **Final** — the producer's editable decision used for naming and export.
 
 Sonic supports common major, minor, modal, sharp/flat, compact, and Camelot
 key formats; alternate and half/double-time tempos; detune in cents,
-semitones, half-steps, or directional language; source evidence; confidence;
-and conflict warnings.
+semitones, half-steps, or directional language; source evidence; text/tag
+match strength; and conflict warnings.
 
 > [!CAUTION]
 > Sonic v0.2 does **not** derive BPM, key, or tuning from the audio signal. It
@@ -233,18 +231,17 @@ engine, or check GitHub for a Sonic update.
 
 [**Download the latest Windows x64 installer →**](https://github.com/eterniastudio/sonic/releases/latest)
 
-Sonic targets Windows 10/11 x64 and Microsoft WebView2. The current public
-build is v0.1.3; the full workstation interface documented here ships with the
-next v0.2 release.
+Sonic v0.2.0 targets Windows 10/11 x64 and Microsoft WebView2. The latest
+verified installer and its release artifacts are available from the link
+above.
 
 > [!WARNING]
 > The installer is not currently Authenticode-signed, so Windows SmartScreen
-> may warn before installation. The current v0.1.3 release includes
-> `SHA256SUMS.txt` for installer verification. The v0.2 release pipeline also
-> adds GitHub build-provenance attestation.
+> may warn before installation. The v0.2 release includes `SHA256SUMS.txt` and
+> GitHub build-provenance attestation for independent verification.
 
 <details>
-<summary><strong>Verify the current installer checksum</strong></summary>
+<summary><strong>Verify the installer checksum</strong></summary>
 
 Download the installer and `SHA256SUMS.txt` from the same release, open
 PowerShell in that folder, and run:
@@ -377,6 +374,7 @@ workspace.
 | [Contributing](CONTRIBUTING.md) | Development workflow and review expectations. |
 | [Verification guide](tests/VERIFICATION.md) | Manual and automated release checks. |
 | [Sidecar schema](docs/sidecar-schema.md) | `.sonic.json` v1 fields, privacy behavior, and integrity rules. |
+| [Metadata claims boundary](docs/metadata-claims-boundary.md) | Current parser behavior and rules for any future audio-derived estimates. |
 | [Third-party notices](THIRD_PARTY_NOTICES.md) | Dependency and bundled-tool attribution. |
 
 <details>
@@ -401,7 +399,9 @@ docs/                   Product media, schema, and compliance references
 The next producer-intelligence phase may add audio-derived tempo, key, and
 tuning estimates with explicit confidence and Declared-versus-Detected
 comparison. Detected values must never silently replace the producer's final
-metadata.
+metadata. The contract for that future work is documented in the
+[metadata claims boundary](docs/metadata-claims-boundary.md); it is not a v0.2
+feature claim.
 
 Cookie import, DRM bypass, credential capture, playlist scraping, arbitrary
 download providers, arbitrary FFmpeg arguments, and silent media-tool

@@ -31,6 +31,7 @@ export type MusicMetadata = {
   camelot?: string;
   detuneCents?: number;
   tuningHz?: number;
+  /** Confidence in text/tag pattern matches. This is not audio-analysis confidence. */
   confidence: number;
   matches: MetadataMatch[];
   warnings: string[];
@@ -55,6 +56,7 @@ export type SourceInspection = {
   audio: AudioProperties;
   declaredMetadata: MusicMetadata;
   embeddedMetadata: MusicMetadata;
+  /** Derived only from declared text and embedded tags; never from the audio signal. */
   suggestedMetadata: MusicMetadata;
   warnings: string[];
   /** Convenience alias for suggestedMetadata used by presentation selectors. */

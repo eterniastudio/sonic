@@ -56,7 +56,7 @@
       "binaries/versions.json": "versions.json"
     },
     "shortDescription": "A local-first producer intake and export workstation.",
-    "longDescription": "Sonic organizes authorized media and local audio into a producer-ready queue with editable BPM, musical key, tuning metadata, export recipes, and a searchable local library.",
+    "longDescription": "Sonic organizes authorized media and local audio into a producer-ready queue with declared-metadata review, producer-verified BPM, musical key and tuning values, export recipes, and a searchable local library.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

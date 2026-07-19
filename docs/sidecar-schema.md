@@ -73,6 +73,12 @@ optional fields. Readers should ignore unknown fields but reject a
 `schemaVersion` they do not support when using the sidecar for destructive or
 integrity-sensitive operations.
 
+In schema version 1, `metadata.evidence` records matches from declared source
+text or embedded file tags. It does not contain waveform-derived BPM, key, or
+tuning estimates. The `metadata` object stores the producer-reviewed final
+values used for export; a final value may therefore differ from its recorded
+text or tag evidence.
+
 ## Privacy
 
 For a local source, `source.originalPath` is `null` unless **Include source
