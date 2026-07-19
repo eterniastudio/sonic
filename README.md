@@ -372,14 +372,42 @@ Run the same principal checks as CI:
 ```powershell
 ./scripts/validate-release-version.ps1
 npm audit --audit-level=high
+npm run installer:smoke:verify
 npm run test:coverage
 npm run check
 npm run build
+npm run bundle:budget
 cargo fmt --manifest-path src-tauri/Cargo.toml --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml --all-features
 cargo audit --file src-tauri/Cargo.lock
 ```
+
+The live media-engine check is intentionally manual because it contacts
+YouTube. After `npm run tools:fetch`, run `npm run media:e2e` to verify the
+pinned Python, yt-dlp, Deno, FFmpeg, and ffprobe chain against the default NASA
+SVS public-domain source. The script uses Sonic's production acquisition
+arguments, creates a bounded eight-second MP3, verifies embedded tags through
+ffprobe, and removes its randomized Windows Temp workspace on success or
+failure. Pass `-Url` directly to the PowerShell script only for media you are
+authorized to download.
+
+### Frontend bundle budget
+
+`npm run bundle:budget` measures the complete `dist` directory after a
+production build and fails when any raw or gzip limit is exceeded. Gzip totals
+are the sum of each file compressed independently, matching the way browser
+assets are transferred. The v0.2 production baseline and enforced ceilings are:
+
+| Payload | Baseline raw | Raw budget | Baseline gzip | Gzip budget |
+| --- | ---: | ---: | ---: | ---: |
+| JavaScript | 415,100 B | 440,000 B | 116,301 B | 125,000 B |
+| CSS | 39,489 B | 42,000 B | 7,841 B | 8,500 B |
+| All static files (9) | 539,764 B | 570,000 B | 207,944 B | 220,000 B |
+
+Both pull-request CI and tagged-release CI run this gate immediately after the
+Vite build. Update a ceiling only with a measured, reviewed reason; do not raise
+it solely to make a regression pass.
 
 Frontend coverage is written to `artifacts/coverage/frontend`. The Vitest
 suites cover reducer reconciliation, filename behavior, formatters, JSON wire

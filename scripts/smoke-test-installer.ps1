@@ -4,7 +4,8 @@ param(
   [Parameter(Mandatory = $true)][string]$ExpectedVersion,
   [string]$ReferenceIconPath,
   [ValidateRange(5, 60)][int]$StartupSeconds = 30,
-  [ValidateRange(30, 600)][int]$OperationTimeoutSeconds = 600
+  [ValidateRange(30, 600)][int]$OperationTimeoutSeconds = 600,
+  [switch]$PreflightOnly
 )
 
 Set-StrictMode -Version Latest
@@ -15,23 +16,95 @@ if ([string]::IsNullOrWhiteSpace($ReferenceIconPath)) {
   $ReferenceIconPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'src-tauri\icons\32x32.png'
 }
 
+function ConvertTo-WindowsCommandLineArgument {
+  param(
+    [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value
+  )
+
+  if ($Value.IndexOf([char]0) -ge 0) {
+    throw 'A process argument contains a null character.'
+  }
+  if ($Value.Length -gt 0 -and $Value -notmatch '[\s"]') {
+    return $Value
+  }
+
+  # Follow the CommandLineToArgvW quoting rules used by ProcessStartInfo on
+  # Windows: quote the argument, double backslashes before a quote, and double
+  # trailing backslashes before the closing quote.
+  $escaped = [regex]::Replace($Value, '(\\*)"', '$1$1\"')
+  $escaped = [regex]::Replace($escaped, '(\\+)$', '$1$1')
+  return '"' + $escaped + '"'
+}
+
+function ConvertTo-NsisInstallArguments {
+  param(
+    [Parameter(Mandatory = $true)][string]$InstallDirectory
+  )
+
+  if (-not [IO.Path]::IsPathRooted($InstallDirectory)) {
+    throw 'The NSIS install directory must be an absolute path.'
+  }
+  $fullPath = [IO.Path]::GetFullPath($InstallDirectory)
+  if ($fullPath.IndexOf([char]0) -ge 0 -or $fullPath.IndexOf('"') -ge 0 -or $fullPath -match '[\r\n]') {
+    throw 'The NSIS install directory contains a character that cannot be represented safely.'
+  }
+
+  # NSIS is intentionally different from normal argv parsing: /D= must be the
+  # final raw command-line tail and must remain unquoted even when the path has
+  # spaces. ProcessStartInfo still launches the executable directly; no shell
+  # interprets this string.
+  return '/S /D=' + $fullPath
+}
+
 function Invoke-HiddenProcess {
+  [CmdletBinding(DefaultParameterSetName = 'Structured')]
   param(
     [Parameter(Mandatory = $true)][string]$FilePath,
-    [string[]]$Arguments = @(),
+    [Parameter(ParameterSetName = 'Structured')][string[]]$Arguments = @(),
+    [Parameter(Mandatory = $true, ParameterSetName = 'Raw')][ValidateNotNullOrEmpty()][string]$RawArguments,
     [Parameter(Mandatory = $true)][int]$TimeoutSeconds,
     [switch]$AllowNonZeroExit
   )
 
-  $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -PassThru -WindowStyle Hidden
+  $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+  $startInfo.FileName = $FilePath
+  $startInfo.UseShellExecute = $false
+  $startInfo.CreateNoWindow = $true
+  $startInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+
+  if ($PSCmdlet.ParameterSetName -ceq 'Raw') {
+    $startInfo.Arguments = $RawArguments
+    $argumentDisplay = $RawArguments
+  } else {
+    # ArgumentList gives each ordinary value an unambiguous argv boundary on
+    # modern PowerShell/.NET. Windows PowerShell 5.1 receives the equivalent,
+    # explicitly escaped command line.
+    $argumentListProperty = $startInfo.PSObject.Properties['ArgumentList']
+    if ($null -ne $argumentListProperty) {
+      foreach ($argument in $Arguments) {
+        $startInfo.ArgumentList.Add($argument)
+      }
+    } else {
+      $startInfo.Arguments = (($Arguments | ForEach-Object {
+        ConvertTo-WindowsCommandLineArgument -Value $_
+      }) -join ' ')
+    }
+    $argumentDisplay = $Arguments -join ' '
+  }
+
+  $process = New-Object System.Diagnostics.Process
+  $process.StartInfo = $startInfo
   try {
+    if (-not $process.Start()) {
+      throw "Failed to start process: $FilePath"
+    }
     if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
       try { $process.Kill() } catch { Write-Warning "Could not terminate timed-out process $($process.Id): $($_.Exception.Message)" }
-      throw "Process timed out after $TimeoutSeconds seconds: $FilePath $($Arguments -join ' ')"
+      throw "Process timed out after $TimeoutSeconds seconds: $FilePath $argumentDisplay"
     }
     $process.Refresh()
     if (-not $AllowNonZeroExit -and $process.ExitCode -ne 0) {
-      throw "Process exited with code $($process.ExitCode): $FilePath $($Arguments -join ' ')"
+      throw "Process exited with code $($process.ExitCode): $FilePath $argumentDisplay"
     }
     return $process.ExitCode
   } finally {
@@ -250,27 +323,45 @@ function Get-InstalledExecutable {
 
 function Get-SonicShortcuts {
   param(
-    [Parameter(Mandatory = $true)][string]$InstalledExecutable
+    [string]$InstalledExecutable
   )
 
   $searchRoots = @(
-    [Environment]::GetFolderPath('DesktopDirectory'),
-    [Environment]::GetFolderPath('CommonDesktopDirectory'),
-    [Environment]::GetFolderPath('Programs'),
-    [Environment]::GetFolderPath('CommonPrograms')
-  ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Container) } | Select-Object -Unique
+    [PSCustomObject]@{ Path = [Environment]::GetFolderPath('DesktopDirectory'); Recurse = $false },
+    [PSCustomObject]@{ Path = [Environment]::GetFolderPath('CommonDesktopDirectory'); Recurse = $false },
+    [PSCustomObject]@{ Path = [Environment]::GetFolderPath('Programs'); Recurse = $true },
+    [PSCustomObject]@{ Path = [Environment]::GetFolderPath('CommonPrograms'); Recurse = $true }
+  ) | Where-Object {
+    -not [string]::IsNullOrWhiteSpace($_.Path) -and (Test-Path -LiteralPath $_.Path -PathType Container)
+  } | Sort-Object Path -Unique
 
   $shell = New-Object -ComObject WScript.Shell
   $matching = @()
   foreach ($root in $searchRoots) {
-    foreach ($link in Get-ChildItem -LiteralPath $root -Filter '*.lnk' -File -Recurse -ErrorAction SilentlyContinue) {
+    $links = if ($root.Recurse) {
+      Get-ChildItem -LiteralPath $root.Path -Filter '*.lnk' -File -Recurse -ErrorAction SilentlyContinue
+    } else {
+      Get-ChildItem -LiteralPath $root.Path -Filter '*.lnk' -File -ErrorAction SilentlyContinue
+    }
+    foreach ($link in $links) {
       try {
         $shortcut = $shell.CreateShortcut($link.FullName)
-        if ([IO.Path]::GetFullPath([string]$shortcut.TargetPath) -ieq [IO.Path]::GetFullPath($InstalledExecutable)) {
+        $targetPath = [string]$shortcut.TargetPath
+        $arguments = [string]$shortcut.Arguments
+        $targetsInstalledExecutable = -not [string]::IsNullOrWhiteSpace($InstalledExecutable) -and
+          -not [string]::IsNullOrWhiteSpace($targetPath) -and
+          [IO.Path]::GetFullPath($targetPath) -ieq [IO.Path]::GetFullPath($InstalledExecutable)
+        $targetsSonic = $targetsInstalledExecutable -or
+          $link.BaseName -ieq 'Sonic' -or
+          (-not [string]::IsNullOrWhiteSpace($targetPath) -and [IO.Path]::GetFileName($targetPath) -ieq 'sonic.exe') -or
+          $arguments -match '(?i)(?:^|[\\/])studio\.eternia\.sonic(?:[\\/]|$)'
+        if ($targetsSonic) {
           $matching += [PSCustomObject]@{
             Path = $link.FullName
-            TargetPath = [string]$shortcut.TargetPath
+            TargetPath = $targetPath
+            Arguments = $arguments
             IconLocation = [string]$shortcut.IconLocation
+            TargetsInstalledExecutable = $targetsInstalledExecutable
           }
         }
       } catch {
@@ -279,6 +370,122 @@ function Get-SonicShortcuts {
     }
   }
   return @($matching | Sort-Object Path -Unique)
+}
+
+function Get-SonicUninstallRegistrations {
+  param(
+    [Parameter(Mandatory = $true)][string[]]$RegistryRoots
+  )
+
+  $registrations = @()
+  foreach ($root in $RegistryRoots) {
+    if (-not (Test-Path -LiteralPath $root)) {
+      continue
+    }
+    foreach ($key in Get-ChildItem -LiteralPath $root -ErrorAction Stop) {
+      try {
+        $registration = Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction Stop
+        $displayNameProperty = $registration.PSObject.Properties['DisplayName']
+        $publisherProperty = $registration.PSObject.Properties['Publisher']
+        $installLocationProperty = $registration.PSObject.Properties['InstallLocation']
+        $uninstallStringProperty = $registration.PSObject.Properties['UninstallString']
+        $displayName = if ($null -eq $displayNameProperty) { '' } else { ([string]$displayNameProperty.Value).Trim() }
+        $publisher = if ($null -eq $publisherProperty) { '' } else { ([string]$publisherProperty.Value).Trim() }
+        $installLocation = if ($null -eq $installLocationProperty) { '' } else { ([string]$installLocationProperty.Value).Trim().Trim('"') }
+        $uninstallString = if ($null -eq $uninstallStringProperty) { '' } else { ([string]$uninstallStringProperty.Value).Trim() }
+        $isSonic = $key.PSChildName -ieq 'Sonic' -or
+          $displayName -ieq 'Sonic' -or
+          ($displayName -match '(?i)^Sonic(?:\s|$)' -and $publisher -ieq 'Eternia Studios') -or
+          $installLocation -match '(?i)(?:^|[\\/])studio\.eternia\.sonic(?:[\\/]|$)' -or
+          $uninstallString -match '(?i)(?:^|[\\/])Sonic(?:[\\/])uninstall\.exe(?:"|\s|$)'
+        if ($isSonic) {
+          $registrations += [PSCustomObject]@{
+            Path = $key.PSPath
+            DisplayName = $displayName
+            Publisher = $publisher
+            InstallLocation = $installLocation
+          }
+        }
+      } catch {
+        throw "Could not inspect uninstall registration $($key.PSPath): $($_.Exception.Message)"
+      }
+    }
+  }
+  return @($registrations)
+}
+
+function Get-SonicRunEntries {
+  param(
+    [Parameter(Mandatory = $true)][string[]]$RegistryPaths
+  )
+
+  $entries = @()
+  foreach ($registryPath in $RegistryPaths) {
+    if (-not (Test-Path -LiteralPath $registryPath)) {
+      continue
+    }
+    $key = Get-Item -LiteralPath $registryPath -ErrorAction Stop
+    foreach ($name in $key.GetValueNames()) {
+      $value = [string]$key.GetValue(
+        $name,
+        $null,
+        [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
+      )
+      if ($name -ieq 'Sonic' -or
+          $value -match '(?i)(?:^|["\s])[^"\r\n]*[\\/]sonic\.exe(?:"|\s|$)' -or
+          $value -match '(?i)(?:^|[\\/])studio\.eternia\.sonic(?:[\\/]|$)') {
+        $entries += [PSCustomObject]@{
+          RegistryPath = $registryPath
+          Name = $name
+          Value = $value
+        }
+      }
+    }
+  }
+  return @($entries)
+}
+
+function Assert-CleanSonicPreflight {
+  param(
+    [Parameter(Mandatory = $true)][string[]]$UninstallRegistryRoots,
+    [Parameter(Mandatory = $true)][string[]]$ProductRegistryPaths,
+    [Parameter(Mandatory = $true)][string[]]$RunRegistryPaths,
+    [Parameter(Mandatory = $true)][hashtable]$FilesystemResources,
+    [Parameter(Mandatory = $true)][string]$SmokeRoot
+  )
+
+  $findings = New-Object 'System.Collections.Generic.List[string]'
+
+  foreach ($registration in Get-SonicUninstallRegistrations -RegistryRoots $UninstallRegistryRoots) {
+    $findings.Add("uninstall registration: $($registration.Path) ($($registration.DisplayName); $($registration.InstallLocation))")
+  }
+  foreach ($registryPath in $ProductRegistryPaths) {
+    if (Test-Path -LiteralPath $registryPath) {
+      $findings.Add("product registration: $registryPath")
+    }
+  }
+  foreach ($runEntry in Get-SonicRunEntries -RegistryPaths $RunRegistryPaths) {
+    $findings.Add("startup Run value: $($runEntry.RegistryPath)::$($runEntry.Name) = $($runEntry.Value)")
+  }
+  foreach ($process in @(Get-Process -Name 'Sonic' -ErrorAction SilentlyContinue)) {
+    $findings.Add("running Sonic process: PID $($process.Id) ($($process.ProcessName))")
+  }
+  foreach ($resource in $FilesystemResources.GetEnumerator() | Sort-Object Name) {
+    if (Test-Path -LiteralPath $resource.Key) {
+      $findings.Add("$($resource.Value): $($resource.Key)")
+    }
+  }
+  foreach ($shortcut in Get-SonicShortcuts) {
+    $findings.Add("Sonic-targeting shortcut: $($shortcut.Path) -> $($shortcut.TargetPath) $($shortcut.Arguments)")
+  }
+  if (Test-Path -LiteralPath $SmokeRoot) {
+    $findings.Add("previous smoke-test root: $SmokeRoot")
+  }
+
+  if ($findings.Count -gt 0) {
+    throw "Installer smoke preflight refused to mutate a machine with existing Sonic state:`n - $($findings -join "`n - ")"
+  }
+  Write-Host 'Installer smoke preflight passed: no existing Sonic installation, process, startup entry, shortcut, or application data was found.'
 }
 
 function Remove-IsolatedSmokeDirectory {
@@ -293,7 +500,86 @@ function Remove-IsolatedSmokeDirectory {
     throw "Refusing to clean a path outside the isolated smoke-test root: $resolvedPath"
   }
   if (Test-Path -LiteralPath $resolvedPath) {
+    $reparsePoints = @(Get-Item -LiteralPath $resolvedPath -Force) + @(
+      Get-ChildItem -LiteralPath $resolvedPath -Recurse -Force -ErrorAction Stop
+    ) | Where-Object { ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 }
+    if (@($reparsePoints).Count -gt 0) {
+      throw "Refusing to recursively clean a directory containing a reparse point: $($reparsePoints[0].FullName)"
+    }
     Remove-Item -LiteralPath $resolvedPath -Recurse -Force
+  }
+}
+
+function Get-RegistryDefaultValue {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path
+  )
+
+  $key = Get-Item -LiteralPath $Path -ErrorAction Stop
+  return [string]$key.GetValue(
+    '',
+    $null,
+    [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
+  )
+}
+
+function Test-PathEquals {
+  param(
+    [Parameter(Mandatory = $true)][string]$Left,
+    [Parameter(Mandatory = $true)][string]$Right
+  )
+
+  if ([string]::IsNullOrWhiteSpace($Left) -or [string]::IsNullOrWhiteSpace($Right)) {
+    return $false
+  }
+  return [IO.Path]::GetFullPath($Left.Trim().Trim('"')).TrimEnd('\', '/') -ieq
+    [IO.Path]::GetFullPath($Right.Trim().Trim('"')).TrimEnd('\', '/')
+}
+
+function Remove-OwnedRegistryKey {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][string[]]$OwnedInstallDirectories,
+    [Parameter(Mandatory = $true)][ValidateSet('InstallLocation', 'DefaultValue')][string]$OwnershipValue
+  )
+
+  if (-not (Test-Path -LiteralPath $Path)) {
+    return
+  }
+  if ($OwnershipValue -eq 'InstallLocation') {
+    $properties = Get-ItemProperty -LiteralPath $Path -ErrorAction Stop
+    $property = $properties.PSObject.Properties['InstallLocation']
+    $registeredLocation = if ($null -eq $property) { '' } else { [string]$property.Value }
+  } else {
+    $registeredLocation = Get-RegistryDefaultValue -Path $Path
+  }
+  $isOwned = @($OwnedInstallDirectories | Where-Object {
+    Test-PathEquals -Left $registeredLocation -Right $_
+  }).Count -gt 0
+  if (-not $isOwned) {
+    throw "Refusing to remove registry key '$Path' because its recorded location '$registeredLocation' is not a clean path owned by this smoke run."
+  }
+  Remove-Item -LiteralPath $Path -Recurse -Force
+}
+
+function Remove-OwnedRunEntries {
+  param(
+    [Parameter(Mandatory = $true)][string[]]$RegistryPaths,
+    [Parameter(Mandatory = $true)][string[]]$OwnedInstallDirectories
+  )
+
+  $normalizedInstalls = @($OwnedInstallDirectories | ForEach-Object {
+    [IO.Path]::GetFullPath($_).TrimEnd('\', '/')
+  })
+  foreach ($entry in Get-SonicRunEntries -RegistryPaths $RegistryPaths) {
+    $expandedValue = [Environment]::ExpandEnvironmentVariables([string]$entry.Value).Trim()
+    $isOwned = @($normalizedInstalls | Where-Object {
+      $expandedValue.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0
+    }).Count -gt 0
+    if (-not $isOwned) {
+      throw "Refusing to remove Run value '$($entry.RegistryPath)::$($entry.Name)' because it does not target a clean path owned by this smoke run: $($entry.Value)"
+    }
+    Remove-ItemProperty -LiteralPath $entry.RegistryPath -Name $entry.Name -Force
   }
 }
 
@@ -328,34 +614,81 @@ $localAppData = [Environment]::GetFolderPath('LocalApplicationData')
 if ([string]::IsNullOrWhiteSpace($localAppData)) {
   throw 'The current user does not have a LocalApplicationData directory.'
 }
+$roamingAppData = [Environment]::GetFolderPath('ApplicationData')
+if ([string]::IsNullOrWhiteSpace($roamingAppData)) {
+  throw 'The current user does not have an ApplicationData directory.'
+}
 $isolationBase = if (-not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) { $env:RUNNER_TEMP } else { $localAppData }
 $smokeRoot = Join-Path $isolationBase 'SonicInstallerSmoke'
 $installDirectory = Join-Path $smokeRoot ([Guid]::NewGuid().ToString('N'))
 
 $uninstallRegistryPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Sonic'
-if (Test-Path -LiteralPath $uninstallRegistryPath) {
-  throw "A current-user Sonic installation is already registered. Run the installer smoke test only on a clean Windows runner. Registry key: $uninstallRegistryPath"
-}
-New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null
+$uninstallRegistryRoots = @(
+  'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall',
+  'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall',
+  'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+)
+$manufacturerRegistryPath = 'HKCU:\Software\Eternia Studios'
+$productRegistryPath = 'HKCU:\Software\Eternia Studios\Sonic'
+$productRegistryPaths = @(
+  $productRegistryPath,
+  'HKCU:\Software\Sonic',
+  'HKLM:\Software\Eternia Studios\Sonic',
+  'HKLM:\Software\WOW6432Node\Eternia Studios\Sonic',
+  'HKLM:\Software\Sonic',
+  'HKLM:\Software\WOW6432Node\Sonic'
+)
+$runRegistryPaths = @(
+  'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run',
+  'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run',
+  'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run'
+)
 $appDataCandidates = @(
-  (Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'studio.eternia.sonic'),
+  (Join-Path $roamingAppData 'studio.eternia.sonic'),
   (Join-Path $localAppData 'studio.eternia.sonic')
-) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
-$preexistingAppData = @{}
-foreach ($appDataPath in $appDataCandidates) {
-  $preexistingAppData[$appDataPath] = Test-Path -LiteralPath $appDataPath
+) | Select-Object -Unique
+$sonicLocalData = Join-Path $localAppData 'studio.eternia.sonic'
+$defaultInstallDirectory = Join-Path $localAppData 'Sonic'
+$ownedInstallDirectories = @($installDirectory, $defaultInstallDirectory)
+$filesystemResources = @{
+  $defaultInstallDirectory = 'default Sonic install directory'
+  (Join-Path $roamingAppData 'studio.eternia.sonic') = 'roaming Sonic app data'
+  $sonicLocalData = 'local Sonic app data/data directory'
+  (Join-Path $sonicLocalData 'media-engine') = 'Sonic media engine'
+  (Join-Path $sonicLocalData 'data') = 'Sonic data directory'
+  (Join-Path $sonicLocalData 'EBWebView') = 'Sonic WebView profile'
 }
 
+Assert-CleanSonicPreflight `
+  -UninstallRegistryRoots $uninstallRegistryRoots `
+  -ProductRegistryPaths $productRegistryPaths `
+  -RunRegistryPaths $runRegistryPaths `
+  -FilesystemResources $filesystemResources `
+  -SmokeRoot $smokeRoot
+
+if ($PreflightOnly) {
+  Write-Host 'Preflight-only mode completed without launching the installer or changing the machine.'
+  return
+}
+
+$manufacturerRegistryExisted = Test-Path -LiteralPath $manufacturerRegistryPath
+$smokeRootCreated = $false
 $appProcess = $null
 $uninstaller = $null
 $trackedShortcuts = @()
 $installAttempted = $false
+$appDataCreationAttempted = $false
 $uninstallVerified = $false
+$smokeFailure = $null
+$cleanupFailures = New-Object 'System.Collections.Generic.List[string]'
 
 try {
+  New-Item -ItemType Directory -Path $smokeRoot -ErrorAction Stop | Out-Null
+  $smokeRootCreated = $true
   Write-Host "Silently installing $($installer.Name) into isolated per-user path $installDirectory"
   $installAttempted = $true
-  Invoke-HiddenProcess -FilePath $installer.FullName -Arguments @('/S', "/D=$installDirectory") -TimeoutSeconds $OperationTimeoutSeconds | Out-Null
+  $installerArguments = ConvertTo-NsisInstallArguments -InstallDirectory $installDirectory
+  Invoke-HiddenProcess -FilePath $installer.FullName -RawArguments $installerArguments -TimeoutSeconds $OperationTimeoutSeconds | Out-Null
 
   if (-not (Test-Path -LiteralPath $installDirectory -PathType Container)) {
     throw "The installer did not honor the isolated install directory: $installDirectory"
@@ -378,6 +711,15 @@ try {
   }
   Write-Host "Verified HKCU installer registration for Sonic $ExpectedVersion by Eternia Studios."
 
+  if (-not (Test-Path -LiteralPath $productRegistryPath)) {
+    throw "The installer did not create Sonic's product registration at $productRegistryPath."
+  }
+  $productInstallLocation = Get-RegistryDefaultValue -Path $productRegistryPath
+  if (-not (Test-PathEquals -Left $productInstallLocation -Right $installDirectory)) {
+    throw "Product registration '$productRegistryPath' points to '$productInstallLocation' instead of '$installDirectory'."
+  }
+  Write-Host "Verified Sonic product registration at $productRegistryPath."
+
   $sonic = Get-InstalledExecutable -Root $installDirectory -AllowedNames @('Sonic.exe', 'sonic.exe') -Description 'Sonic application'
   Assert-IconMatches -Path $sonic.FullName -ExpectedFingerprint $embeddedIconFingerprint -Description 'application executable'
 
@@ -388,9 +730,14 @@ try {
   $uninstaller = $uninstallers[0]
   Assert-IconMatches -Path $uninstaller.FullName -ExpectedFingerprint $embeddedIconFingerprint -Description 'uninstaller'
 
-  $trackedShortcuts = @(Get-SonicShortcuts -InstalledExecutable $sonic.FullName)
+  $createdSonicShortcuts = @(Get-SonicShortcuts -InstalledExecutable $sonic.FullName)
+  $trackedShortcuts = @($createdSonicShortcuts | Where-Object { $_.TargetsInstalledExecutable })
   if ($trackedShortcuts.Count -lt 1) {
     throw "The installer did not create a Start Menu or desktop shortcut targeting $($sonic.FullName)."
+  }
+  $unexpectedShortcuts = @($createdSonicShortcuts | Where-Object { -not $_.TargetsInstalledExecutable })
+  if ($unexpectedShortcuts.Count -gt 0) {
+    throw "The installer created a Sonic shortcut that does not target the isolated executable: $($unexpectedShortcuts[0].Path) -> $($unexpectedShortcuts[0].TargetPath)"
   }
   foreach ($shortcut in $trackedShortcuts) {
     if (-not [string]::IsNullOrWhiteSpace($shortcut.IconLocation)) {
@@ -470,12 +817,13 @@ try {
 
   $mediaEngineDirectory = Join-Path $localAppData 'studio.eternia.sonic\media-engine'
   if (Test-Path -LiteralPath $mediaEngineDirectory) {
-    throw "The clean smoke runner already contains Sonic's optional media engine: $mediaEngineDirectory"
+    throw "The installer unexpectedly created Sonic's optional media engine before its explicit setup test: $mediaEngineDirectory"
   }
   $setupScript = Join-Path $installDirectory 'install-media-engine.ps1'
   $manifestPath = Join-Path $installDirectory 'tool-manifest.json'
   $systemPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
   $setupArguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" -ManifestPath "{1}" -InstallDirectory "{2}"' -f $setupScript, $manifestPath, $mediaEngineDirectory
+  $appDataCreationAttempted = $true
   $setupResult = Invoke-ToolProbe -FilePath $systemPowerShell -Arguments $setupArguments -TimeoutSeconds $OperationTimeoutSeconds
   if ($setupResult -notin @('installed', 'ready')) {
     throw "Media engine setup returned an unexpected result: $setupResult"
@@ -573,8 +921,7 @@ try {
     $installRemains = Test-Path -LiteralPath $installDirectory
     $registryRemains = Test-Path -LiteralPath $uninstallRegistryPath
     $shortcutRemains = @($trackedShortcuts | Where-Object { Test-Path -LiteralPath $_.Path }).Count -gt 0
-    $engineRemains = Test-Path -LiteralPath $mediaEngineDirectory
-    if (-not $installRemains -and -not $registryRemains -and -not $shortcutRemains -and -not $engineRemains) {
+    if (-not $installRemains -and -not $registryRemains -and -not $shortcutRemains) {
       break
     }
     Start-Sleep -Milliseconds 500
@@ -587,73 +934,206 @@ try {
   if ($registryRemains) {
     throw "Silent uninstall left Sonic's uninstall registration behind: $uninstallRegistryPath"
   }
-  if ($engineRemains) {
-    throw "Silent uninstall left Sonic's optional media engine behind: $mediaEngineDirectory"
-  }
   foreach ($shortcut in $trackedShortcuts) {
     if (Test-Path -LiteralPath $shortcut.Path) {
       throw "Silent uninstall left a Sonic shortcut behind: $($shortcut.Path)"
     }
   }
+  $runResidue = @(Get-SonicRunEntries -RegistryPaths $runRegistryPaths)
+  if ($runResidue.Count -gt 0) {
+    throw "Silent uninstall left a Sonic startup Run value behind: $($runResidue[0].RegistryPath)::$($runResidue[0].Name)"
+  }
 
   $uninstallVerified = $true
-  Write-Host 'Installer smoke test passed: install, bundled tools, verified runtime engine, icons, startup, uninstall, and cleanup are verified.'
+} catch {
+  $smokeFailure = $_
 } finally {
   if ($null -ne $appProcess) {
     try {
       if (-not $appProcess.HasExited) { Stop-Process -Id $appProcess.Id -Force }
     } catch {
-      Write-Warning "Could not stop Sonic during smoke-test cleanup: $($_.Exception.Message)"
+      $cleanupFailures.Add("Could not stop Sonic during smoke-test cleanup: $($_.Exception.Message)")
     } finally {
       $appProcess.Dispose()
     }
   }
 
+  if ($installAttempted -and -not $uninstallVerified -and $null -eq $uninstaller -and (Test-Path -LiteralPath $defaultInstallDirectory -PathType Container)) {
+    try {
+      $fallbackUninstallers = @(Get-ChildItem -LiteralPath $defaultInstallDirectory -Recurse -File -ErrorAction Stop | Where-Object {
+        $_.Name -match '(?i)^uninstall.*\.exe$'
+      })
+      if ($fallbackUninstallers.Count -eq 1) {
+        $uninstaller = $fallbackUninstallers[0]
+      } elseif ($fallbackUninstallers.Count -gt 1) {
+        throw "Found more than one fallback uninstaller under $defaultInstallDirectory."
+      }
+    } catch {
+      $cleanupFailures.Add("Could not locate a fallback uninstaller: $($_.Exception.Message)")
+    }
+  }
   if ($installAttempted -and -not $uninstallVerified -and $null -ne $uninstaller -and (Test-Path -LiteralPath $uninstaller.FullName)) {
     try {
       Invoke-HiddenProcess -FilePath $uninstaller.FullName -Arguments @('/S') -TimeoutSeconds $OperationTimeoutSeconds -AllowNonZeroExit | Out-Null
     } catch {
-      Write-Warning "Fallback silent uninstall failed: $($_.Exception.Message)"
+      $cleanupFailures.Add("Fallback silent uninstall failed: $($_.Exception.Message)")
     }
   }
-  if (Test-Path -LiteralPath $uninstallRegistryPath) {
-    try {
-      $leftoverRegistration = Get-ItemProperty -LiteralPath $uninstallRegistryPath
-      $leftoverLocation = ([string]$leftoverRegistration.InstallLocation).Trim().Trim('"').TrimEnd('\', '/')
-      if (-not [string]::IsNullOrWhiteSpace($leftoverLocation) -and [IO.Path]::GetFullPath($leftoverLocation) -ieq [IO.Path]::GetFullPath($installDirectory)) {
-        Remove-Item -LiteralPath $uninstallRegistryPath -Recurse -Force
-      } else {
-        Write-Warning "Refusing to remove a Sonic uninstall registration that does not point to the isolated smoke directory."
+
+  try {
+    foreach ($ownedDirectory in $ownedInstallDirectories) {
+      $expectedExecutable = Join-Path $ownedDirectory 'sonic.exe'
+      foreach ($shortcut in @(Get-SonicShortcuts -InstalledExecutable $expectedExecutable | Where-Object { $_.TargetsInstalledExecutable })) {
+        if (Test-Path -LiteralPath $shortcut.Path) {
+          Remove-Item -LiteralPath $shortcut.Path -Force
+        }
       }
-    } catch {
-      Write-Warning "Could not clean the isolated uninstall registration: $($_.Exception.Message)"
     }
+  } catch {
+    $cleanupFailures.Add("Could not remove shortcut created for the isolated install: $($_.Exception.Message)")
   }
-  foreach ($shortcut in $trackedShortcuts) {
+
+  try {
+    Remove-OwnedRunEntries -RegistryPaths $runRegistryPaths -OwnedInstallDirectories $ownedInstallDirectories
+  } catch {
+    $cleanupFailures.Add($_.Exception.Message)
+  }
+
+  try {
+    $leftoverRegistrations = @(Get-SonicUninstallRegistrations -RegistryRoots $uninstallRegistryRoots)
+  } catch {
+    $leftoverRegistrations = @()
+    $cleanupFailures.Add("Could not enumerate Sonic uninstall registrations during cleanup: $($_.Exception.Message)")
+  }
+  foreach ($leftoverRegistration in $leftoverRegistrations) {
     try {
-      if (Test-Path -LiteralPath $shortcut.Path) { Remove-Item -LiteralPath $shortcut.Path -Force }
+      Remove-OwnedRegistryKey -Path $leftoverRegistration.Path -OwnedInstallDirectories $ownedInstallDirectories -OwnershipValue InstallLocation
     } catch {
-      Write-Warning "Could not remove smoke-test shortcut $($shortcut.Path): $($_.Exception.Message)"
+      $cleanupFailures.Add("Could not clean Sonic uninstall registration '$($leftoverRegistration.Path)': $($_.Exception.Message)")
     }
   }
+
+  foreach ($leftoverProductPath in $productRegistryPaths) {
+    if (Test-Path -LiteralPath $leftoverProductPath) {
+      try {
+        Remove-OwnedRegistryKey -Path $leftoverProductPath -OwnedInstallDirectories $ownedInstallDirectories -OwnershipValue DefaultValue
+      } catch {
+        $cleanupFailures.Add("Could not clean Sonic product registration '$leftoverProductPath': $($_.Exception.Message)")
+      }
+    }
+  }
+
   if (Test-Path -LiteralPath $installDirectory) {
     try {
       Remove-IsolatedSmokeDirectory -Path $installDirectory -AllowedRoot $smokeRoot
     } catch {
-      Write-Warning "Could not remove isolated smoke-test directory: $($_.Exception.Message)"
+      $cleanupFailures.Add("Could not remove isolated smoke-test directory: $($_.Exception.Message)")
     }
   }
-  if ((Test-Path -LiteralPath $smokeRoot) -and -not (Get-ChildItem -LiteralPath $smokeRoot -Force | Select-Object -First 1)) {
-    Remove-Item -LiteralPath $smokeRoot -Force
+
+  if ($installAttempted -and (Test-Path -LiteralPath $defaultInstallDirectory)) {
+    try {
+      Remove-IsolatedSmokeDirectory -Path $defaultInstallDirectory -AllowedRoot $localAppData
+    } catch {
+      $cleanupFailures.Add("Could not remove a default install directory created after the clean preflight: $($_.Exception.Message)")
+    }
   }
-  foreach ($appDataPath in $appDataCandidates) {
-    if (-not $preexistingAppData[$appDataPath] -and (Test-Path -LiteralPath $appDataPath)) {
-      try {
-        $allowedAppDataRoot = Split-Path -Parent $appDataPath
-        Remove-IsolatedSmokeDirectory -Path $appDataPath -AllowedRoot $allowedAppDataRoot
-      } catch {
-        Write-Warning "Could not remove app data created by the smoke test at ${appDataPath}: $($_.Exception.Message)"
+
+  if ($appDataCreationAttempted) {
+    foreach ($appDataPath in $appDataCandidates) {
+      if (Test-Path -LiteralPath $appDataPath) {
+        try {
+          $allowedAppDataRoot = Split-Path -Parent $appDataPath
+          Remove-IsolatedSmokeDirectory -Path $appDataPath -AllowedRoot $allowedAppDataRoot
+        } catch {
+          $cleanupFailures.Add("Could not remove app data created by the smoke test at ${appDataPath}: $($_.Exception.Message)")
+        }
       }
     }
   }
+
+  if (-not $manufacturerRegistryExisted -and (Test-Path -LiteralPath $manufacturerRegistryPath)) {
+    try {
+      $manufacturerKey = Get-Item -LiteralPath $manufacturerRegistryPath -ErrorAction Stop
+      $hasValues = $manufacturerKey.GetValueNames().Count -gt 0
+      $hasChildren = @(Get-ChildItem -LiteralPath $manufacturerRegistryPath -ErrorAction Stop).Count -gt 0
+      if ($hasValues -or $hasChildren) {
+        throw "The manufacturer registration contains unexpected residue: $manufacturerRegistryPath"
+      }
+      Remove-Item -LiteralPath $manufacturerRegistryPath -Force
+    } catch {
+      $cleanupFailures.Add("Could not clean the manufacturer registration created by the smoke test: $($_.Exception.Message)")
+    }
+  }
+
+  if ($smokeRootCreated -and (Test-Path -LiteralPath $smokeRoot)) {
+    try {
+      $smokeRootResidue = @(Get-ChildItem -LiteralPath $smokeRoot -Force -ErrorAction Stop)
+      if ($smokeRootResidue.Count -gt 0) {
+        throw "The smoke-test root contains unexpected residue: $($smokeRootResidue.FullName -join ', ')"
+      }
+      Remove-Item -LiteralPath $smokeRoot -Force
+    } catch {
+      $cleanupFailures.Add("Could not remove the smoke-test root: $($_.Exception.Message)")
+    }
+  }
+
+  foreach ($residueCheck in @(
+    @{ Description = 'isolated install directory'; Present = (Test-Path -LiteralPath $installDirectory) },
+    @{ Description = 'default install directory'; Present = ($installAttempted -and (Test-Path -LiteralPath $defaultInstallDirectory)) },
+    @{ Description = 'smoke-test root'; Present = ($smokeRootCreated -and (Test-Path -LiteralPath $smokeRoot)) }
+  )) {
+    if ($residueCheck.Present) {
+      $cleanupFailures.Add("Cleanup residue remains: $($residueCheck.Description).")
+    }
+  }
+  if ($appDataCreationAttempted) {
+    foreach ($appDataPath in $appDataCandidates) {
+      if (Test-Path -LiteralPath $appDataPath) {
+        $cleanupFailures.Add("Cleanup residue remains in app data: $appDataPath")
+      }
+    }
+  }
+  try {
+    foreach ($registration in Get-SonicUninstallRegistrations -RegistryRoots $uninstallRegistryRoots) {
+      $cleanupFailures.Add("Cleanup residue remains in uninstall registration: $($registration.Path)")
+    }
+  } catch {
+    $cleanupFailures.Add("Could not assert that every Sonic uninstall registration was removed: $($_.Exception.Message)")
+  }
+  foreach ($leftoverProductPath in $productRegistryPaths) {
+    if (Test-Path -LiteralPath $leftoverProductPath) {
+      $cleanupFailures.Add("Cleanup residue remains in product registration: $leftoverProductPath")
+    }
+  }
+  try {
+    foreach ($shortcut in Get-SonicShortcuts) {
+      $cleanupFailures.Add("Cleanup residue remains in Sonic-targeting shortcut: $($shortcut.Path) -> $($shortcut.TargetPath)")
+    }
+  } catch {
+    $cleanupFailures.Add("Could not assert that every Sonic-targeting shortcut was removed: $($_.Exception.Message)")
+  }
+  try {
+    foreach ($runEntry in Get-SonicRunEntries -RegistryPaths $runRegistryPaths) {
+      $cleanupFailures.Add("Cleanup residue remains in Run value: $($runEntry.RegistryPath)::$($runEntry.Name)")
+    }
+  } catch {
+    $cleanupFailures.Add("Could not assert that every Sonic Run value was removed: $($_.Exception.Message)")
+  }
 }
+
+if ($null -ne $smokeFailure -or $cleanupFailures.Count -gt 0) {
+  $failureParts = New-Object 'System.Collections.Generic.List[string]'
+  if ($null -ne $smokeFailure) {
+    $failureParts.Add("Installer verification failed: $($smokeFailure.Exception.Message)")
+  }
+  foreach ($cleanupFailure in $cleanupFailures) {
+    $failureParts.Add("Cleanup failed: $cleanupFailure")
+  }
+  throw ($failureParts -join "`n")
+}
+
+if (-not $uninstallVerified) {
+  throw 'Installer verification ended without a verified silent uninstall.'
+}
+Write-Host 'Installer smoke test passed: install, bundled tools, verified runtime engine, icons, startup, uninstall, and owned-resource cleanup are verified.'

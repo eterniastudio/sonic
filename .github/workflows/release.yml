@@ -61,6 +61,9 @@ jobs:
         shell: pwsh
         run: ./scripts/validate-release-version.ps1 -ExpectedTag $env:RELEASE_TAG
 
+      - name: Validate installer smoke safety contract
+        run: npm run installer:smoke:verify
+
       - name: Audit JavaScript dependencies
         run: npm audit --audit-level=high
 
@@ -75,6 +78,9 @@ jobs:
 
       - name: Frontend production build
         run: npm run build
+
+      - name: Enforce frontend bundle budget
+        run: npm run bundle:budget
 
       - name: Rust format check
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --check

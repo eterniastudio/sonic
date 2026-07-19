@@ -14,14 +14,17 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "bundle:budget": "node scripts/check-bundle-budget.mjs",
     "check": "tsc --noEmit",
+    "installer:smoke:verify": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-smoke-test-installer.ps1",
+    "media:e2e": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-media-engine-e2e.ps1",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "notices:npm": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-npm-notices.ps1",
     "notices:rust": "cargo fetch --locked --manifest-path src-tauri/Cargo.toml && cargo about generate --frozen --fail --all-features --manifest-path src-tauri/Cargo.toml --config about.toml --output-file artifacts/licenses/SONIC-RUST-THIRD-PARTY-LICENSES.html scripts/cargo-about.hbs",
     "notices:generate": "npm run notices:npm && npm run notices:rust",
-    "release:prepare": "npm run build && npm run notices:generate",
+    "release:prepare": "npm run build && npm run bundle:budget && npm run notices:generate",
     "tools:fetch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-tools.ps1",
     "preview": "vite preview",
     "tauri": "tauri"

@@ -20,6 +20,8 @@ changes that require migration notes.
   WAV targets, FLAC, and Opus 192.
 - Declared/embedded/suggested/final metadata comparison, evidence display,
   alternate tempo selection, and half-time/double-time correction.
+- Producer-style BPM, key, and master-pitch parsing, including bracketed
+  descriptions and cent-detuned beats.
 - Embedded tag writing, readback status, output hashing, and versioned private
   `.sonic.json` metadata sidecars.
 - Rust-authoritative filename templates with producer tokens, previews,
@@ -60,6 +62,13 @@ changes that require migration notes.
 - Uses same-volume per-job staging and no-replace audio/sidecar publication.
 - Redacts source URLs and personal paths from exported diagnostics.
 - Bounds preview duration, cache count, cache bytes, and waveform output.
+- Enforces reviewed raw and gzip frontend bundle ceilings in CI and release
+  builds.
+- Adds a hash-verified, bounded live media-engine E2E check using an authorized
+  NASA SVS source and ffprobe tag readback.
+- Refuses installer smoke testing before mutation when any Sonic install,
+  process, startup entry, shortcut, application data, or stale smoke root is
+  already present, then verifies owned-resource cleanup after the run.
 
 [Unreleased]: https://github.com/eterniastudio/sonic/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/eterniastudio/sonic/compare/v0.1.3...v0.2.0

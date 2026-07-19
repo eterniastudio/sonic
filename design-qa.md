@@ -98,9 +98,9 @@ the Playwright CLI.
 
 ## Automated gate
 
-- 48 frontend tests pass across seven files.
+- 54 frontend tests pass across eight files.
 - Axe semantic/accessibility gate passes.
-- Coverage: 98.22% statements, 79.17% branches, 95.83% functions, and 98.52%
+- Coverage: 98.22% statements, 79.79% branches, 95.83% functions, and 98.52%
   lines.
 - TypeScript check and Vite production build pass.
 - Stable clean reload produces no application console error. A transient
