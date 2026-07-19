@@ -10,17 +10,17 @@ import { SettingsPage } from "../features/settings/SettingsPage";
 import { useSonic } from "./SonicProvider";
 
 const ROUTE_LABELS = {
-  session: ["Session", "Intake, verify, and export"],
-  library: ["Library", "Your local producer archive"],
-  settings: ["Settings", "Engine and workspace defaults"],
+  session: ["Session", "Add, review, and export"],
+  library: ["Library", "Your finished tracks"],
+  settings: ["Settings", "Files, exports, and updates"],
 } as const;
 
 const SHORTCUTS = [
-  ["Ctrl + L", "Focus source intake"],
-  ["Ctrl + O", "Import local audio"],
-  ["Ctrl + F", "Search the Beat Library"],
-  ["Space", "Play or pause a loaded preview"],
-  ["Alt + ↑ / ↓", "Move a focused queue item"],
+  ["Ctrl + L", "Focus the link field"],
+  ["Ctrl + O", "Choose audio files"],
+  ["Ctrl + F", "Search the Library"],
+  ["Space", "Play or pause the preview"],
+  ["Alt + ↑ / ↓", "Move the selected queue item"],
   ["?", "Show keyboard shortcuts"],
   ["Esc", "Close the current overlay"],
 ];
@@ -111,7 +111,7 @@ export function SonicApp() {
       <div className="boot-screen" role="status" aria-live="polite">
         <span className="boot-mark"><CircleNotch className="spin" size={29} aria-hidden="true" /></span>
         <strong>Opening Sonic</strong>
-        <span>Recovering the session and checking the local engine.</span>
+        <span>Loading your last session…</span>
       </div>
     );
   }
@@ -128,7 +128,7 @@ export function SonicApp() {
           <button className={`engine-indicator${engineReady ? " is-ready" : ""}`} type="button" onClick={() => setRoute("settings")}>
             <span aria-hidden="true" />
             <HardDrives size={17} aria-hidden="true" />
-            <b>{engineReady ? "Engine ready" : "Engine needs attention"}</b>
+            <b>{engineReady ? "Ready" : "Set up media tools"}</b>
           </button>
         </header>
 
@@ -150,15 +150,15 @@ export function SonicApp() {
       {state.dropActive ? (
         <div className="drop-overlay" role="status" aria-live="polite">
           <span><HardDrives size={34} weight="fill" aria-hidden="true" /></span>
-          <strong>Drop audio into this session</strong>
-          <small>Sonic will inspect supported files before adding them to the queue.</small>
+          <strong>Drop audio to add it</strong>
+          <small>WAV, MP3, M4A, FLAC, Opus, OGG, and WebM</small>
         </div>
       ) : null}
 
       {state.globalError ? (
         <div className="global-toast" role="alert" tabIndex={-1}>
           <WarningCircle size={20} weight="fill" aria-hidden="true" />
-          <div><strong>Sonic couldn’t finish that action</strong><span>{state.globalError}</span></div>
+          <div><strong>Couldn’t complete that</strong><span>{state.globalError}</span></div>
           <button type="button" onClick={dismissError} aria-label="Dismiss error"><X size={17} aria-hidden="true" /></button>
         </div>
       ) : null}
@@ -168,7 +168,7 @@ export function SonicApp() {
       {state.shortcutsOpen ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShortcutsOpen(false); }}>
           <section ref={shortcutDialogRef} className="shortcut-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcut-heading">
-            <header><span><Keyboard size={21} aria-hidden="true" /></span><div><h2 id="shortcut-heading">Keyboard shortcuts</h2><p>Keep the producer workflow moving without leaving the keyboard.</p></div><button autoFocus type="button" onClick={() => setShortcutsOpen(false)} aria-label="Close shortcuts"><X size={17} aria-hidden="true" /></button></header>
+            <header><span><Keyboard size={21} aria-hidden="true" /></span><div><h2 id="shortcut-heading">Keyboard shortcuts</h2><p>Common actions, without reaching for the mouse.</p></div><button autoFocus type="button" onClick={() => setShortcutsOpen(false)} aria-label="Close shortcuts"><X size={17} aria-hidden="true" /></button></header>
             <dl>{SHORTCUTS.map(([keys, action]) => <div key={keys}><dt>{keys.split(" + ").map((key) => <kbd key={key}>{key}</kbd>)}</dt><dd>{action}</dd></div>)}</dl>
           </section>
         </div>

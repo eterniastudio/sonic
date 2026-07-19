@@ -28,7 +28,7 @@ describe("producer-facing formatting", () => {
     expect(shortened).toContain("…");
     expect(shortened.endsWith("beat.wav")).toBe(true);
     expect(statusLabel("writingMetadata")).toBe("Writing metadata");
-    expect(statusLabel("failed")).toBe("Needs attention");
+    expect(statusLabel("failed")).toBe("Failed");
     expect(statusLabel("futureState")).toBe("futureState");
   });
 });

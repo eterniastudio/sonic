@@ -49,14 +49,14 @@ export function SourceComposer() {
     >
       <div className="composer-heading">
         <div>
-          <span className="eyebrow">New intake</span>
-          <h1 id="source-composer-title">Build this session</h1>
+          <span className="eyebrow">Add audio</span>
+          <h1 id="source-composer-title">Start with a link or file</h1>
         </div>
         {bridgeMode === "preview" ? <span className="preview-mode">Browser preview</span> : null}
       </div>
       <form className="composer-input" onSubmit={(event) => void submit(event)}>
         <LinkSimple size={20} aria-hidden="true" />
-        <label className="sr-only" htmlFor="source-links">Authorized media links, one per line</label>
+        <label className="sr-only" htmlFor="source-links">YouTube links, one per line</label>
         <textarea
           id="source-links"
           rows={1}
@@ -65,22 +65,22 @@ export function SourceComposer() {
           onKeyDown={(event) => {
             if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) void submit();
           }}
-          placeholder="Paste one or more authorized video links"
+          placeholder="Paste YouTube links — one per line"
         />
         <button className="icon-button" type="button" onClick={() => void paste()} aria-label="Paste links from clipboard" title="Paste links">
           <ClipboardText size={19} aria-hidden="true" />
         </button>
         <button className="composer-add" type="submit" disabled={!value.trim() || submitting}>
           <Plus size={18} weight="bold" aria-hidden="true" />
-          <span>{submitting ? "Adding…" : "Add"}</span>
+          <span>{submitting ? "Adding…" : "Add links"}</span>
         </button>
       </form>
       <div className="composer-footer">
         <button type="button" onClick={() => void importFiles()}>
           <FileAudio size={18} aria-hidden="true" />
-          Import audio files
+          Choose audio files
         </button>
-        <span>or drop WAV, MP3, M4A, FLAC, Opus, OGG, or WebM anywhere</span>
+        <span>or drop WAV, MP3, M4A, FLAC, Opus, OGG, or WebM here</span>
         <kbd>Ctrl</kbd><kbd>Enter</kbd><span className="shortcut-copy">to add links</span>
       </div>
     </section>

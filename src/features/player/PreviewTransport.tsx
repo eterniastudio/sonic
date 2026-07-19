@@ -115,15 +115,15 @@ export function PreviewTransport() {
         }}
         onEnded={() => setPlaying(false)}
         onError={() => {
-          setMediaError("The cached preview could not be played. Try loading it again.");
+          setMediaError("Couldn’t play this preview. Close it and try again.");
           setPlaying(false);
         }}
       />
       <div className="transport-identity">
         <span className="transport-icon"><SpeakerHigh size={19} aria-hidden="true" /></span>
         <span>
-          <small>{player.loading ? "Preparing preview" : player.error || mediaError ? "Preview unavailable" : asset ? "Local preview" : "Preview transport"}</small>
-          <strong>{mediaError ?? asset?.title ?? player.error ?? "Select a source and load its preview"}</strong>
+          <small>{player.loading ? "Loading preview" : player.error || mediaError ? "Can’t play preview" : asset ? "Now previewing" : "Preview"}</small>
+          <strong>{mediaError ?? asset?.title ?? player.error ?? "Choose a track, then play its preview"}</strong>
         </span>
       </div>
 
@@ -157,7 +157,7 @@ export function PreviewTransport() {
       <div className="transport-tools">
         <button type="button" aria-label="Use half-time tempo" disabled={!editableJob?.metadata.bpm || Number(editableJob.metadata.bpm) / 2 < 20} onClick={() => changeTempoFeel(0.5)} title="Use half-time tempo"><b className="tempo-symbol" aria-hidden="true">½</b><span>½ tempo</span></button>
         <button type="button" aria-label="Use double-time tempo" disabled={!editableJob?.metadata.bpm || Number(editableJob.metadata.bpm) * 2 > 400} onClick={() => changeTempoFeel(2)} title="Use double-time tempo"><b className="tempo-symbol" aria-hidden="true">2×</b><span>2× tempo</span></button>
-        <button type="button" disabled={!editableJob} onClick={tap} title={editableJob ? "Tap repeatedly to estimate tempo" : "Tap tempo is available while editing a Session item"}><Metronome size={18} aria-hidden="true" /><span>{tapBpm ? `${tapBpm} BPM` : "Tap tempo"}</span></button>
+        <button type="button" disabled={!editableJob} onClick={tap} title={editableJob ? "Tap along with the beat" : "Select a track in Session to use tap tempo"}><Metronome size={18} aria-hidden="true" /><span>{tapBpm ? `${tapBpm} BPM` : "Tap tempo"}</span></button>
         {asset || player.error ? <button className="transport-close" type="button" onClick={() => void releasePreview()} aria-label="Close preview"><X size={17} aria-hidden="true" /></button> : <Waveform size={19} aria-hidden="true" />}
       </div>
     </footer>

@@ -31,6 +31,7 @@ export function LibraryPage() {
   const [filters, setFilters] = useState<LibraryFilters>(EMPTY_FILTERS);
   const [sort, setSort] = useState<LibrarySort>("newest");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const hasFilters = Boolean(query.trim() || filters.format || filters.key || filters.bpmMin || filters.bpmMax || filters.missingOnly);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void refreshLibrary(query, filters, sort), 240);
@@ -48,8 +49,8 @@ export function LibraryPage() {
     <main className="library-layout" aria-labelledby="library-heading">
       <section className="library-workspace">
         <header className="page-heading">
-          <div><span className="eyebrow">Local history</span><h1 id="library-heading">Beat library</h1><p>Search, verify, and re-export every completed intake.</p></div>
-          <span className="page-count">{items.length} {items.length === 1 ? "export" : "exports"}</span>
+          <div><span className="eyebrow">On this computer</span><h1 id="library-heading">Library</h1><p>Find and play files you’ve exported with Sonic.</p></div>
+          <span className="page-count">{items.length} {items.length === 1 ? "track" : "tracks"}</span>
         </header>
 
         <div className="library-tools">
@@ -85,8 +86,8 @@ export function LibraryPage() {
         ) : null}
 
         {items.length ? (
-          <div className="library-table" role="list" aria-label="Beat library results">
-            <div className="library-table-head" aria-hidden="true"><span>Track</span><span>Music</span><span>Format</span><span>Exported</span></div>
+          <div className="library-table" role="list" aria-label="Library results">
+            <div className="library-table-head" aria-hidden="true"><span>Track</span><span>Details</span><span>Format</span><span>Exported</span></div>
             {items.map((item) => (
               <div role="listitem" key={item.id} className="library-row-item">
                 <button
@@ -99,7 +100,7 @@ export function LibraryPage() {
                   <span className="library-art" aria-hidden="true">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" /> : <FileAudio size={21} />}</span>
                   <span><strong>{item.title}</strong><small>{item.creator ?? item.sourceLabel}</small></span>
                 </span>
-                <span className="library-music"><strong>{item.bpm ? `${item.bpm} BPM` : "Tempo —"}</strong><small>{item.key ?? "Key —"}{item.camelot ? ` · ${item.camelot}` : ""}</small></span>
+                <span className="library-music"><strong>{item.bpm ? `${item.bpm} BPM` : "No BPM"}</strong><small>{item.key ?? "No key"}{item.camelot ? ` · ${item.camelot}` : ""}</small></span>
                 <span className="format-cell"><b>{item.format.toUpperCase()}</b><small>{formatBytes(item.fileSizeBytes)}</small></span>
                 <span className="date-cell"><strong>{new Date(item.exportedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</strong><small>{item.exists ? "Available" : "File missing"}</small></span>
                 {!item.exists ? <WarningCircle className="missing-icon" size={17} weight="fill" aria-label="File missing" /> : null}
@@ -108,7 +109,7 @@ export function LibraryPage() {
             ))}
           </div>
         ) : (
-          <div className="library-empty"><MagnifyingGlass size={31} aria-hidden="true" /><h2>No matching exports</h2><p>Adjust the filters or complete an export from the Session view.</p></div>
+          <div className="library-empty"><MagnifyingGlass size={31} aria-hidden="true" /><h2>{hasFilters ? "No matches" : "Your library is empty"}</h2><p>{hasFilters ? "Try a different search or clear your filters." : "Finished exports will appear here."}</p></div>
         )}
       </section>
 
@@ -118,8 +119,8 @@ export function LibraryPage() {
             <div className="detail-art" aria-hidden="true">{selected.thumbnailUrl ? <img src={selected.thumbnailUrl} alt="" /> : <FileAudio size={34} />}</div>
             <span className="eyebrow">{selected.sourceLabel}</span>
             <h2>{selected.title}</h2>
-            <p className="detail-creator">{selected.creator ?? "Creator not declared"}</p>
-            {!selected.exists ? <div className="inline-alert is-error"><WarningCircle size={17} weight="fill" aria-hidden="true" /><span>The recorded output file is no longer at this location.</span></div> : null}
+            <p className="detail-creator">{selected.creator ?? "No artist listed"}</p>
+            {!selected.exists ? <div className="inline-alert is-error"><WarningCircle size={17} weight="fill" aria-hidden="true" /><span>Sonic can’t find this file. It may have been moved or deleted.</span></div> : null}
             <dl className="detail-metrics">
               <div><dt>Tempo</dt><dd>{selected.bpm ? `${selected.bpm} BPM` : "—"}</dd></div>
               <div><dt>Key</dt><dd>{selected.key ?? "—"}</dd></div>
@@ -130,19 +131,19 @@ export function LibraryPage() {
             </dl>
             <div className="detail-path"><span>Output file</span><strong title={selected.outputPath}>{shortPath(selected.outputPath, 54)}</strong></div>
             <div className="detail-actions">
-              <button className="primary-action" type="button" disabled={!selected.exists} onClick={() => void loadPreview(selected)}><Play size={17} weight="fill" aria-hidden="true" /> Load preview</button>
+              <button className="primary-action" type="button" disabled={!selected.exists} onClick={() => void loadPreview(selected)}><Play size={17} weight="fill" aria-hidden="true" /> Play</button>
               <button type="button" disabled={!selected.exists} onClick={() => void revealPath(selected.outputPath)}><FolderOpen size={17} aria-hidden="true" /> Show in folder</button>
-              <button type="button" onClick={() => void reexportLibraryItem(selected.id)}><ArrowClockwise size={17} aria-hidden="true" /> Re-export</button>
-              <button type="button" onClick={() => void openSource(selected.source)}><FileAudio size={17} aria-hidden="true" /> Open source</button>
+              <button type="button" onClick={() => void reexportLibraryItem(selected.id)}><ArrowClockwise size={17} aria-hidden="true" /> Export again</button>
+              <button type="button" onClick={() => void openSource(selected.source)}><FileAudio size={17} aria-hidden="true" /> Open original</button>
             </div>
             <button className="destructive-text" type="button" onClick={() => {
-              if (window.confirm("Remove this history record? The audio file will stay on disk.")) void removeLibraryItem(selected.id, false);
-            }}><Trash size={15} aria-hidden="true" /> Remove history record</button>
+              if (window.confirm("Remove this track from the Library? The audio file won’t be deleted.")) void removeLibraryItem(selected.id, false);
+            }}><Trash size={15} aria-hidden="true" /> Remove from Library</button>
             {selected.exists ? <button className="destructive-text delete-audio" type="button" onClick={() => {
               if (window.confirm(`Permanently delete “${selected.title}” and its Sonic sidecar from disk? This cannot be undone.`)) void removeLibraryItem(selected.id, true);
-            }}><Trash size={15} weight="fill" aria-hidden="true" /> Delete audio + sidecar</button> : null}
+            }}><Trash size={15} weight="fill" aria-hidden="true" /> Delete file and sidecar</button> : null}
           </>
-        ) : <div className="detail-empty"><FileAudio size={30} aria-hidden="true" /><h2>Select an export</h2><p>Its musical details and local actions will appear here.</p></div>}
+        ) : <div className="detail-empty"><FileAudio size={30} aria-hidden="true" /><h2>Select a track</h2><p>Its details and file actions will appear here.</p></div>}
       </aside>
     </main>
   );

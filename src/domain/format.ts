@@ -38,7 +38,7 @@ export function statusLabel(status: string) {
   const labels: Record<string, string> = {
     draft: "Draft",
     inspecting: "Inspecting",
-    review: "Ready for review",
+    review: "Ready",
     queued: "Queued",
     preparing: "Preparing",
     acquiring: "Acquiring",
@@ -49,7 +49,7 @@ export function statusLabel(status: string) {
     validating: "Validating",
     publishing: "Publishing",
     completed: "Completed",
-    failed: "Needs attention",
+    failed: "Failed",
     cancelled: "Cancelled",
     interrupted: "Interrupted",
   };

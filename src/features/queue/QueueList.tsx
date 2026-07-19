@@ -47,8 +47,8 @@ export function QueueList() {
     <section className="queue-panel" aria-labelledby="session-queue-heading">
       <header className="section-toolbar">
         <div>
-          <span className="eyebrow">Session queue</span>
-          <h2 id="session-queue-heading">{jobs.length} {jobs.length === 1 ? "item" : "items"}</h2>
+          <span className="eyebrow">Queue</span>
+          <h2 id="session-queue-heading">{jobs.length} {jobs.length === 1 ? "track" : "tracks"}</h2>
         </div>
         <div className="toolbar-actions">
           <button type="button" onClick={() => void setQueuePaused(!state.queuePaused)} aria-pressed={state.queuePaused}>
@@ -66,7 +66,7 @@ export function QueueList() {
       {state.queuePaused ? (
         <div className="queue-paused" role="status">
           <Pause size={15} weight="fill" aria-hidden="true" />
-          Queue dispatch is paused. Any active export will finish safely.
+          Paused. The current export will keep running.
         </div>
       ) : null}
 
@@ -106,18 +106,18 @@ export function QueueList() {
                     {item.inspection?.thumbnailUrl ? <img src={item.inspection.thumbnailUrl} alt="" /> : <FileAudio size={22} />}
                   </span>
                   <span className="queue-main">
-                    <span className="queue-title">{item.inspection?.title ?? (item.source.kind === "localFile" ? item.source.path.split(/[\\/]/).pop() : "Reading video")}</span>
+                    <span className="queue-title">{item.inspection?.title ?? (item.source.kind === "localFile" ? item.source.path.split(/[\\/]/).pop() : "Reading link")}</span>
                     <span className="queue-subtitle">
                       {item.inspection?.creator ?? item.inspection?.sourceLabel ?? (item.source.kind === "youtube" ? "YouTube" : "Local file")}
                     </span>
                   </span>
                   <span className="queue-metadata" aria-label="Musical metadata">
-                    {item.metadata.bpm ? <b>{item.metadata.bpm} BPM</b> : <b>Tempo —</b>}
-                    <span>{item.metadata.key || "Key —"}</span>
+                    {item.metadata.bpm ? <b>{item.metadata.bpm} BPM</b> : <b>No BPM</b>}
+                    <span>{item.metadata.key || "No key"}</span>
                   </span>
                   <span className="queue-state">
                     <span className="state-label"><StatusIcon item={item} />{statusLabel(item.status)}</span>
-                    <span>{item.progress.message ?? (item.filenamePreview || "Waiting for source details")}</span>
+                    <span>{item.progress.message ?? (item.filenamePreview || "Waiting for details")}</span>
                   </span>
                 </button>
 
@@ -152,7 +152,7 @@ export function QueueList() {
                     {removalMode === "local" || removalMode === "remove" ? (
                       <button type="button" onClick={() => void removeItem(item.id)} aria-label={`Remove ${item.inspection?.title ?? "item"}`}><Trash size={14} aria-hidden="true" /></button>
                     ) : removalMode === "retain-library" ? (
-                      <span className="queue-history-note" title="This completed job backs its Beat Library history record.">In Library</span>
+                      <span className="queue-history-note" title="Remove it from the Library before clearing it here.">In Library</span>
                     ) : null}
                   </div>
                 </div>
@@ -163,19 +163,19 @@ export function QueueList() {
       ) : (
         <div className="queue-empty">
           <FileAudio size={31} aria-hidden="true" />
-          <h3>Your session is clear</h3>
-          <p>Add links or local audio above. Sonic will inspect every source before anything is exported.</p>
+          <h3>Nothing here yet</h3>
+          <p>Paste a link or choose an audio file to get started.</p>
         </div>
       )}
 
       {clearableFinishedCount ? (
         <button className="clear-completed" type="button" onClick={() => void clearCompleted()}>
-          <Trash size={15} aria-hidden="true" /> Clear removable finished items
+          <Trash size={15} aria-hidden="true" /> Clear finished
         </button>
       ) : null}
       {retainedCompletedCount ? (
         <p className="retained-history-note">
-          {retainedCompletedCount} completed {retainedCompletedCount === 1 ? "export stays" : "exports stay"} here because {retainedCompletedCount === 1 ? "it backs" : "they back"} Beat Library history.
+          {retainedCompletedCount} finished {retainedCompletedCount === 1 ? "track is" : "tracks are"} still linked to the Library.
         </p>
       ) : null}
     </section>
