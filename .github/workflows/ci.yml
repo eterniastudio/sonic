@@ -94,6 +94,20 @@ jobs:
       - name: Enforce frontend bundle budget
         run: npm run bundle:budget
 
+      - name: Generate exact dependency notices
+        shell: pwsh
+        run: |
+          ./scripts/generate-npm-notices.ps1
+          cargo fetch --locked --manifest-path src-tauri/Cargo.toml
+          cargo about generate `
+            --frozen `
+            --fail `
+            --all-features `
+            --manifest-path src-tauri/Cargo.toml `
+            --config about.toml `
+            --output-file artifacts/licenses/SONIC-RUST-THIRD-PARTY-LICENSES.html `
+            scripts/cargo-about.hbs
+
       - name: Rust format check
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
 
@@ -132,20 +146,6 @@ jobs:
             -Destination "artifacts/sbom/sonic-cargo.cdx.json"
 
           ./scripts/generate-license-report.ps1
-
-      - name: Generate exact dependency notices
-        shell: pwsh
-        run: |
-          ./scripts/generate-npm-notices.ps1
-          cargo fetch --locked --manifest-path src-tauri/Cargo.toml
-          cargo about generate `
-            --frozen `
-            --fail `
-            --all-features `
-            --manifest-path src-tauri/Cargo.toml `
-            --config about.toml `
-            --output-file artifacts/licenses/SONIC-RUST-THIRD-PARTY-LICENSES.html `
-            scripts/cargo-about.hbs
 
       - name: Upload CycloneDX SBOMs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
