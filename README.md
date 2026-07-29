@@ -231,7 +231,7 @@ engine, or check GitHub for a Sonic update.
 
 [**Download the latest Windows x64 installer →**](https://github.com/eterniastudio/sonic/releases/latest)
 
-Sonic v0.2.1 targets Windows 10/11 x64 and Microsoft WebView2. The latest
+Sonic v0.2.2 targets Windows 10/11 x64 and Microsoft WebView2. The latest
 verified installer and its release artifacts are available from the link
 above.
 

@@ -1,7 +1,7 @@
 {
   "name": "sonic",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Local-first intake, metadata, export, and library workstation for beat producers",
   "author": "Eternia Studios",
   "license": "SEE LICENSE IN LICENSE",
@@ -57,5 +57,8 @@
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
     "vitest": "4.1.10"
+  },
+  "overrides": {
+    "node-gyp": "13.0.1"
   }
 }

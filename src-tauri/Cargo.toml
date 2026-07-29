@@ -1,6 +1,6 @@
 [package]
 name = "sonic"
-version = "0.2.1"
+version = "0.2.2"
 description = "Sonic - a local media intake and music metadata companion for beat producers"
 authors = ["Eternia Studios"]
 license-file = "../LICENSE"
