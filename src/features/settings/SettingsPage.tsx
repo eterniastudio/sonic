@@ -74,7 +74,7 @@ export function SettingsPage() {
         <div className="settings-main">
           <section className="settings-section" aria-labelledby="general-settings">
             <header><div><span className="eyebrow">General</span><h2 id="general-settings">Export defaults</h2></div><FolderOpen size={21} aria-hidden="true" /></header>
-            <button className="path-button" type="button" onClick={() => void chooseOutputDirectory()}>
+            <button className="path-button" type="button" onClick={() => void chooseOutputDirectory(undefined, draft)}>
               <FolderOpen size={17} aria-hidden="true" />
               <span><small>Default output folder</small><strong>{draft.defaultOutputDirectory ? shortPath(draft.defaultOutputDirectory, 68) : "Choose a folder"}</strong></span>
             </button>

@@ -150,6 +150,7 @@ export type SonicAction =
   | { type: "removeLibraryItem"; itemId: string }
   | { type: "selectLibraryItem"; itemId: string | null }
   | { type: "setSettings"; settings: SonicSettings }
+  | { type: "setDefaultOutputDirectory"; directory: string }
   | { type: "setDiagnostics"; diagnostics: Diagnostics }
   | { type: "setDropActive"; active: boolean }
   | { type: "setError"; error: string | null }
@@ -291,6 +292,22 @@ export function sonicReducer(state: SonicState, action: SonicAction): SonicState
         ...state,
         settings: { ...action.settings, queuePaused: state.queuePaused },
       };
+    case "setDefaultOutputDirectory": {
+      const previous = state.settings.defaultOutputDirectory;
+      const jobsById = Object.fromEntries(Object.entries(state.jobsById).map(([id, item]) => {
+        const inheritsDefault = ["draft", "inspecting", "review"].includes(item.status)
+          && (!item.outputDirectory || item.outputDirectory === previous);
+        return [id, inheritsDefault
+          ? { ...item, outputDirectory: action.directory, updatedAt: new Date().toISOString() }
+          : item];
+      }));
+      return {
+        ...state,
+        jobsById,
+        settings: { ...state.settings, defaultOutputDirectory: action.directory },
+        diagnostics: { ...state.diagnostics, outputDirectory: action.directory },
+      };
+    }
     case "setDiagnostics":
       return { ...state, diagnostics: action.diagnostics };
     case "setDropActive":

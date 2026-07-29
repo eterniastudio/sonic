@@ -324,6 +324,12 @@ jobs:
           > [!WARNING]
           > **No Authenticode certificate.** Windows SmartScreen may warn before installation. Sonic's in-app updater separately verifies every update with the embedded Tauri signing key. You can also verify `SHA256SUMS.txt` and the GitHub artifact attestation.
 
+          ## What this fixes
+
+          Sonic now accepts a valid Windows output folder consistently, including folders previously stored with Windows' internal `\\?\` prefix. Selecting a new default folder saves it immediately and updates unqueued Session items that inherited the old default.
+
+          Sonic v0.2 parses BPM, key, and tuning written in source text or embedded tags. It does not infer them from the audio waveform; review or edit the final values before export.
+
           This release passed version consistency, dependency audits, frontend unit/contract/accessibility tests, TypeScript/build checks, Rust formatting, Clippy with warnings denied, Rust tests, packaged sidecar validation, signed updater metadata validation, icon checks, application startup, and silent install/uninstall cleanup on a clean Windows runner.
 
           The installer includes pinned yt-dlp and CPython components. Deno and FFmpeg are not redistributed by this release; Sonic offers an explicit one-click setup that downloads their pinned artifacts directly from the upstream GitHub releases and verifies every file before use.

@@ -1,7 +1,7 @@
 {
   "name": "sonic",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Local-first intake, metadata, export, and library workstation for beat producers",
   "author": "Eternia Studios",
   "license": "SEE LICENSE IN LICENSE",

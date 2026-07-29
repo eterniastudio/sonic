@@ -6,6 +6,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { BUILTIN_PRESETS, DEFAULT_SETTINGS } from "../domain/defaults";
 import { renderFilename } from "../domain/filename";
+import { externalOutputDirectory } from "../domain/path";
 import type {
   BootstrapPayload,
   Diagnostics,
@@ -115,7 +116,7 @@ function nativeExportRequest(request: ExportRequest) {
       normalizeLufs: request.normalizeLufs ?? null,
       writeEmbeddedTags: request.writeEmbeddedTags,
     },
-    outputDirectory: request.outputDirectory,
+    outputDirectory: externalOutputDirectory(request.outputDirectory),
     filenameTemplate: request.filenameTemplate,
   };
 }
@@ -306,7 +307,7 @@ export class NativeBridge implements SonicBridge {
       const result = await invoke<{ jobId: string }>("start_download", {
         request: {
           url: request.source.url,
-          outputDirectory: request.outputDirectory,
+          outputDirectory: externalOutputDirectory(request.outputDirectory),
           format: legacyFormat,
           fileName: renderFilename({
             source: request.inspection,
@@ -536,9 +537,9 @@ export class NativeBridge implements SonicBridge {
       multiple: false,
       directory: true,
       title: "Choose Sonic output folder",
-      defaultPath: current,
+      defaultPath: current ? externalOutputDirectory(current) : undefined,
     });
-    return typeof selected === "string" ? selected : null;
+    return typeof selected === "string" ? externalOutputDirectory(selected) : null;
   }
 
   async subscribe(onJob: (job: QueueItem) => void, onQueue: (queue: QueueSnapshot) => void): Promise<Unsubscribe> {

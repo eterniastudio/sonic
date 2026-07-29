@@ -19,6 +19,7 @@ import type {
   SourceInput,
   SourceInspection,
 } from "../domain/types";
+import { externalOutputDirectory } from "../domain/path";
 
 export function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -221,7 +222,7 @@ export function normalizeQueueItem(value: unknown, fallback?: Partial<QueueItem>
     writeEmbeddedTags: asBoolean(exportSpec.writeEmbeddedTags, fallback?.writeEmbeddedTags ?? true),
     templateId: asString(raw.templateId, fallback?.templateId ?? "title-metadata"),
     customTemplate: asOptionalString(request.filenameTemplate ?? raw.customTemplate ?? raw.filenameTemplate) ?? fallback?.customTemplate,
-    outputDirectory: asString(request.outputDirectory ?? raw.outputDirectory, fallback?.outputDirectory ?? ""),
+    outputDirectory: externalOutputDirectory(asString(request.outputDirectory ?? raw.outputDirectory, fallback?.outputDirectory ?? "")),
     filenamePreview: asString(raw.filenamePreview ?? raw.fileName, fallback?.filenamePreview ?? ""),
     status: normalizeStatus(raw.state ?? raw.status ?? fallback?.status),
     progress: normalizeProgress(raw.progress ?? raw),
@@ -307,7 +308,7 @@ export function normalizeSettings(value: unknown): SonicSettings {
   const filenameTemplate = asString(raw.filenameTemplate, DEFAULT_SETTINGS.filenameTemplate);
   return {
     ...DEFAULT_SETTINGS,
-    defaultOutputDirectory: asString(raw.defaultOutputDirectory, DEFAULT_SETTINGS.defaultOutputDirectory),
+    defaultOutputDirectory: externalOutputDirectory(asString(raw.defaultOutputDirectory, DEFAULT_SETTINGS.defaultOutputDirectory)),
     filenameTemplate,
     defaultPresetId: normalizePresetId(raw.defaultPresetId, DEFAULT_SETTINGS.defaultPresetId),
     defaultTemplateId: DEFAULT_SETTINGS.templates.find((template) => template.template === filenameTemplate)?.id ?? "custom-default",

@@ -45,41 +45,29 @@ impl AppState {
     pub fn initialize(app: &AppHandle) -> AppResult<Self> {
         let repository = Repository::open(app)?;
         let settings = repository.get_settings()?;
-        match settings.settings.default_output_directory.as_deref() {
-            Some(path) => {
-                let repaired = canonical_output_directory(path)
-                    .and_then(|output| external_path_string(&output))
-                    .ok()
-                    .filter(|normalized| normalized != path);
-                if let Some(normalized) = repaired {
-                    let _ = repository.update_settings(
-                        SettingsPatch {
-                            default_output_directory: Some(normalized),
-                            ..Default::default()
-                        },
-                        settings.revision,
-                    );
-                }
-            }
-            None => {
-                let normalized = app
-                    .path()
+        let configured = settings.settings.default_output_directory.as_deref();
+        let normalized = configured
+            .and_then(|path| canonical_output_directory(path).ok())
+            .and_then(|output| external_path_string(&output).ok())
+            .or_else(|| {
+                app.path()
                     .download_dir()
                     .or_else(|_| app.path().desktop_dir())
                     .ok()
                     .and_then(|base| {
                         canonical_output_directory(&base.join("Sonic").to_string_lossy()).ok()
                     })
-                    .and_then(|output| external_path_string(&output).ok());
-                if let Some(normalized) = normalized {
-                    let _ = repository.update_settings(
-                        SettingsPatch {
-                            default_output_directory: Some(normalized),
-                            ..Default::default()
-                        },
-                        settings.revision,
-                    );
-                }
+                    .and_then(|output| external_path_string(&output).ok())
+            });
+        if normalized.as_deref() != configured {
+            if let Some(normalized) = normalized {
+                let _ = repository.update_settings(
+                    SettingsPatch {
+                        default_output_directory: Some(normalized),
+                        ..Default::default()
+                    },
+                    settings.revision,
+                );
             }
         }
         let recovery_report = recover_interrupted_jobs(&repository)?;

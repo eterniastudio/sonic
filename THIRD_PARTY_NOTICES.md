@@ -1,7 +1,7 @@
 # Third-party notices
 
 This notice covers the principal third-party materials used by **Sonic
-v0.2.0 for Windows x64**. Sonic's original code is proprietary under the root
+v0.2.1 for Windows x64**. Sonic's original code is proprietary under the root
 [LICENSE](LICENSE). Each third-party component remains governed by its own
 license.
 
@@ -13,7 +13,7 @@ also include CycloneDX SBOMs and generated dependency notices.
 
 ## What the Sonic installer contains
 
-The v0.2.0 installer contains these independently launched tools. None is
+The v0.2.1 installer contains these independently launched tools. None is
 linked into Sonic's proprietary Rust executable.
 
 | Component | Exact artifact | SHA-256 | License |
@@ -66,7 +66,7 @@ artifacts and the source/license references recorded by Sonic.
 
 ## Code and assets incorporated into Sonic
 
-| Component | Version in v0.2.0 | License | Source |
+| Component | Version in v0.2.1 | License | Source |
 | --- | --- | --- | --- |
 | Tauri runtime and JavaScript API | Rust `tauri` 2.11.5; `@tauri-apps/api` 2.11.1 | MIT or Apache-2.0; Sonic uses the MIT option | [Tauri source](https://github.com/tauri-apps/tauri/tree/tauri-v2.11.5) |
 | Tauri first-party plugins | dialog 2.7.1, opener 2.5.4, shell 2.3.5, process 2.3.1, updater 2.10.1 | MIT or Apache-2.0; Sonic uses the MIT option | [plugins workspace](https://github.com/tauri-apps/plugins-workspace) |
@@ -95,7 +95,7 @@ use in the release pipeline.
 
 ## Included notice files
 
-An official v0.2.0 release includes or installs:
+An official v0.2.1 release includes or installs:
 
 - Sonic's proprietary `LICENSE`;
 - this `THIRD_PARTY_NOTICES.md`;

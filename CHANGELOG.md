@@ -6,18 +6,19 @@ changes that require migration notes.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-28
+
 ### Fixed
 
+- Fixed exports failing with "Choose an absolute output folder" after a valid
+  Windows folder had been selected. Sonic now repairs invalid or legacy saved
+  settings, strips internal `\\?\` prefixes at every renderer/native boundary,
+  persists folder choices immediately, and applies a changed default to
+  unqueued Session items.
 - Made the v0.2 metadata boundary explicit throughout the inspector and
   documentation: confidence refers to declared-text and embedded-tag matches,
   audio-signal analysis is not performed, and producers remain responsible for
   verifying the final export values.
-- Fixed Windows output folders being saved with a `\\?\` canonical prefix and
-  then rejected when an export was queued. Existing affected folder settings
-  are repaired automatically at startup.
-- Store user-facing local source, completed export, sidecar, diagnostics, and
-  publication paths without Windows' internal verbatim namespace prefix while
-  continuing to reject raw device namespaces.
 
 ## [0.2.0] - 2026-07-18
 
@@ -85,5 +86,6 @@ changes that require migration notes.
   process, startup entry, shortcut, application data, or stale smoke root is
   already present, then verifies owned-resource cleanup after the run.
 
-[Unreleased]: https://github.com/eterniastudio/sonic/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/eterniastudio/sonic/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/eterniastudio/sonic/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/eterniastudio/sonic/compare/v0.1.3...v0.2.0

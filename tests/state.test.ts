@@ -319,6 +319,23 @@ describe("presentation state actions", () => {
     });
   });
 
+  it("applies a changed default output folder to unqueued items that inherited the old default", () => {
+    const inherited = queueItem("inherited", { status: "review", outputDirectory: DEFAULT_SETTINGS.defaultOutputDirectory });
+    const custom = queueItem("custom", { status: "review", outputDirectory: "D:\\Custom" });
+    const queued = queueItem("queued", { status: "queued", outputDirectory: DEFAULT_SETTINGS.defaultOutputDirectory });
+    const state = stateWith([inherited, custom, queued]);
+
+    const updated = sonicReducer(state, {
+      type: "setDefaultOutputDirectory",
+      directory: "C:\\Users\\Producer\\Downloads\\Sonic",
+    });
+
+    expect(updated.settings.defaultOutputDirectory).toBe("C:\\Users\\Producer\\Downloads\\Sonic");
+    expect(updated.jobsById.inherited.outputDirectory).toBe("C:\\Users\\Producer\\Downloads\\Sonic");
+    expect(updated.jobsById.custom.outputDirectory).toBe("D:\\Custom");
+    expect(updated.jobsById.queued.outputDirectory).toBe(DEFAULT_SETTINGS.defaultOutputDirectory);
+  });
+
   it("selects and removes library records without disturbing queue state", () => {
     const state = {
       ...stateWith([queueItem("a")]),

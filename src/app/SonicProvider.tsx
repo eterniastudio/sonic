@@ -75,7 +75,7 @@ export type SonicContextValue = {
   removeLibraryItem(itemId: string, deleteFile: boolean): Promise<void>;
   revealPath(path: string): Promise<void>;
   openSource(source: SourceInput): Promise<void>;
-  chooseOutputDirectory(itemId?: string): Promise<void>;
+  chooseOutputDirectory(itemId?: string, baseSettings?: SonicSettings): Promise<void>;
   saveSettings(settings: SonicSettings): Promise<void>;
   refreshDiagnostics(): Promise<void>;
   exportDiagnostics(): Promise<void>;
@@ -636,13 +636,18 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     try { await bridge.openSource(source); } catch (error) { setError(error); }
   }, [bridge, setError]);
 
-  const chooseOutputDirectory = useCallback(async (itemId?: string) => {
+  const chooseOutputDirectory = useCallback(async (itemId?: string, baseSettings?: SonicSettings) => {
     const current = itemId ? stateRef.current.jobsById[itemId]?.outputDirectory : stateRef.current.settings.defaultOutputDirectory;
     try {
       const selected = await bridge.chooseDirectory(current);
       if (!selected) return;
       if (itemId) dispatch({ type: "updateItem", itemId, patch: { outputDirectory: selected } });
-      else dispatch({ type: "setSettings", settings: { ...stateRef.current.settings, defaultOutputDirectory: selected } });
+      else {
+        const saved = await bridge.updateSettings({ ...(baseSettings ?? stateRef.current.settings), defaultOutputDirectory: selected });
+        dispatch({ type: "setDefaultOutputDirectory", directory: saved.defaultOutputDirectory });
+        dispatch({ type: "setSettings", settings: saved });
+        dispatch({ type: "announce", message: "Default output folder saved." });
+      }
     } catch (error) {
       setError(error);
     }

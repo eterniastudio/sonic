@@ -92,6 +92,8 @@ pub async fn enqueue_exports(
         item.source = fresh.source.clone();
         item.expected_fingerprint = Some(fresh.source_fingerprint.clone());
         item.inspection = fresh;
+        item.output_directory =
+            external_path_string(&canonical_output_directory(&item.output_directory)?)?;
         validate_enqueue_item(&item)?;
         trusted.push(item);
     }
@@ -119,7 +121,8 @@ pub fn update_queued_job(
     let mut stored = state.repository.job_detail(&request.job_id)?.request;
     stored.metadata = request.metadata;
     stored.export = request.export;
-    stored.output_directory = request.output_directory;
+    stored.output_directory =
+        external_path_string(&canonical_output_directory(&request.output_directory)?)?;
     stored.filename_template = request.filename_template;
     validate_enqueue_item(&stored)?;
     state
