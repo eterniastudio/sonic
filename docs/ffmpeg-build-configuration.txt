@@ -1,9 +1,9 @@
-Sonic v0.2.2 optional media engine build configuration
+Sonic v0.2.3 optional media engine build configuration
 ======================================================
 
 Pinned build: N-125365-g9a01c1cb6a-20260630
 Upstream release: https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-06-30-13-34
-Delivery: downloaded directly from the upstream release after explicit user consent; not included in the Sonic installer
+Delivery: downloaded directly from the upstream release when a source needs the media engine or the user starts setup in Settings; not included in the Sonic installer
 
 Captured from `ffmpeg.exe -hide_banner -buildconf`:
 

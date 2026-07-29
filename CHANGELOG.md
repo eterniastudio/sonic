@@ -6,6 +6,17 @@ changes that require migration notes.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-07-28
+
+### Fixed
+
+- Preserved the verified Deno, FFmpeg, and ffprobe media engine when Sonic's
+  passive updater replaces an older installation. The update-mode uninstaller
+  no longer mistakes an update for a deliberate removal.
+- Made source inspection recover automatically when the local media tools are
+  missing. Sonic now prepares and verifies one shared engine setup, continues
+  every waiting inspection, and reports setup progress in the Session.
+
 ## [0.2.2] - 2026-07-28
 
 ### Fixed
@@ -86,6 +97,7 @@ changes that require migration notes.
   process, startup entry, shortcut, application data, or stale smoke root is
   already present, then verifies owned-resource cleanup after the run.
 
-[Unreleased]: https://github.com/eterniastudio/sonic/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/eterniastudio/sonic/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/eterniastudio/sonic/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/eterniastudio/sonic/compare/v0.2.0...v0.2.2
 [0.2.0]: https://github.com/eterniastudio/sonic/compare/v0.1.3...v0.2.0

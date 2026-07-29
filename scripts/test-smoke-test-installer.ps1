@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-  [string]$ScriptPath
+  [string]$ScriptPath,
+  [string]$InstallerHooksPath
 )
 
 Set-StrictMode -Version Latest
@@ -8,6 +9,9 @@ $ErrorActionPreference = 'Stop'
 
 if ([string]::IsNullOrWhiteSpace($ScriptPath)) {
   $ScriptPath = Join-Path $PSScriptRoot 'smoke-test-installer.ps1'
+}
+if ([string]::IsNullOrWhiteSpace($InstallerHooksPath)) {
+  $InstallerHooksPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'src-tauri\windows\installer-hooks.nsh'
 }
 
 $resolvedScript = (Resolve-Path -LiteralPath $ScriptPath -ErrorAction Stop).Path
@@ -86,6 +90,17 @@ foreach ($contract in @(
   Assert-SourceContains -Needle $contract
 }
 
+$installerHooks = Get-Content -Raw -LiteralPath (Resolve-Path -LiteralPath $InstallerHooksPath -ErrorAction Stop)
+$updateGuard = '${If} $UpdateMode <> 1'
+$removeCommand = '-InstallDirectory "$LOCALAPPDATA\studio.eternia.sonic\media-engine" -Remove'
+$guardIndex = $installerHooks.IndexOf($updateGuard, [StringComparison]::Ordinal)
+$removeIndex = $installerHooks.IndexOf($removeCommand, [StringComparison]::Ordinal)
+$guardEndIndex = $installerHooks.IndexOf('${EndIf}', $guardIndex, [StringComparison]::Ordinal)
+if ($guardIndex -lt 0 -or $removeIndex -lt 0 -or $guardEndIndex -lt 0 -or
+    -not ($guardIndex -lt $removeIndex -and $removeIndex -lt $guardEndIndex)) {
+  throw 'Installer hooks must preserve the shared media engine during /UPDATE and remove it only during a deliberate uninstall.'
+}
+
 # Load only the two pure argument-formatting functions' AST extents; do not
 # dot-source or run the installer smoke script.
 foreach ($pureFunctionName in @('ConvertTo-WindowsCommandLineArgument', 'ConvertTo-NsisInstallArguments', 'Resolve-ShortcutIconPath')) {
@@ -146,4 +161,4 @@ foreach ($unsafePath in @('relative\run', "C:\bad`"path", "C:\bad`npath")) {
   }
 }
 
-Write-Host 'Installer smoke safety validation passed (parser, preflight ordering, resource coverage, normal argv quoting, raw final NSIS /D formatting, and fatal cleanup contract).'
+Write-Host 'Installer smoke safety validation passed (parser, preflight ordering, resource coverage, update-safe media-engine cleanup, normal argv quoting, raw final NSIS /D formatting, and fatal cleanup contract).'

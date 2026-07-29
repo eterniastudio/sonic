@@ -9,7 +9,7 @@ index and is not required to understand the file.
 ```json
 {
   "schemaVersion": 1,
-  "sonicVersion": "0.2.2",
+  "sonicVersion": "0.2.3",
   "libraryItemId": "uuid",
   "jobId": "uuid",
   "clientItemId": "optional renderer correlation ID",

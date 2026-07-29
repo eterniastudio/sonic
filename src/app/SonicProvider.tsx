@@ -104,14 +104,47 @@ export function SonicProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(state);
   const pendingUpdateRef = useRef<SonicUpdate | null>(null);
   const updateCheckRef = useRef<Promise<void> | null>(null);
+  const engineSetupRef = useRef<Promise<void> | null>(null);
   stateRef.current = state;
 
   const setError = useCallback((error: unknown) => {
     dispatch({ type: "setError", error: errorMessage(error) });
   }, []);
 
+  const ensureMediaEngine = useCallback(async () => {
+    if (bridge.mode !== "native" || stateRef.current.diagnostics.engine.ready) return;
+    if (!engineSetupRef.current) {
+      engineSetupRef.current = (async () => {
+        dispatch({ type: "announce", message: "Preparing Sonic's verified media tools…" });
+        await bridge.prepareEngine();
+        const diagnostics = await bridge.refreshDependencies();
+        dispatch({ type: "setDiagnostics", diagnostics });
+        if (!diagnostics.engine.ready) {
+          throw new Error("Media tools setup finished, but one or more tools could not be verified.");
+        }
+        dispatch({ type: "announce", message: "Media tools are ready." });
+      })().finally(() => {
+        engineSetupRef.current = null;
+      });
+    }
+    await engineSetupRef.current;
+  }, [bridge]);
+
   const inspectNewItem = useCallback(async (item: QueueItem) => {
     try {
+      if (bridge.mode === "native" && !stateRef.current.diagnostics.engine.ready) {
+        dispatch({
+          type: "updateItem",
+          itemId: item.id,
+          patch: { progress: { message: "Preparing verified media tools" } },
+        });
+        await ensureMediaEngine();
+        dispatch({
+          type: "updateItem",
+          itemId: item.id,
+          patch: { progress: { message: "Reading source metadata" } },
+        });
+      }
       const inspection = await bridge.inspectSource(item.source);
       const metadata: MetadataDraft = {
         title: inspection.title,
@@ -149,7 +182,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
         patch: { status: "failed", error: errorMessage(error), progress: { message: "Inspection failed" } },
       });
     }
-  }, [bridge]);
+  }, [bridge, ensureMediaEngine]);
 
   const addSources = useCallback(async (sources: SourceInput[]) => {
     const existing = new Set(selectJobs(stateRef.current).map((item) => sourceKey(item.source)));
@@ -681,12 +714,11 @@ export function SonicProvider({ children }: { children: ReactNode }) {
 
   const prepareEngine = useCallback(async () => {
     try {
-      await bridge.prepareEngine();
-      dispatch({ type: "setDiagnostics", diagnostics: await bridge.refreshDependencies() });
+      await ensureMediaEngine();
     } catch (error) {
       setError(error);
     }
-  }, [bridge, setError]);
+  }, [ensureMediaEngine, setError]);
 
   const loadPreview = useCallback(async (item: QueueItem | LibraryItem) => {
     const previousAsset = stateRef.current.player.asset;

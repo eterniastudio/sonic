@@ -326,13 +326,15 @@ jobs:
 
           ## What this fixes
 
-          Sonic now accepts a valid Windows output folder consistently, including folders previously stored with Windows' internal `\\?\` prefix. Selecting a new default folder saves it immediately and updates unqueued Session items that inherited the old default.
+          Sonic now keeps its verified Deno and FFmpeg media engine during automatic updates. If those tools are missing, adding a source starts one verified recovery setup and continues inspection when it is ready instead of failing with a missing-Deno error.
+
+          Sonic also accepts a valid Windows output folder consistently, including folders previously stored with Windows' internal `\\?\` prefix. Selecting a new default folder saves it immediately and updates unqueued Session items that inherited the old default.
 
           Sonic v0.2 parses BPM, key, and tuning written in source text or embedded tags. It does not infer them from the audio waveform; review or edit the final values before export.
 
           This release passed version consistency, dependency audits, frontend unit/contract/accessibility tests, TypeScript/build checks, Rust formatting, Clippy with warnings denied, Rust tests, packaged sidecar validation, signed updater metadata validation, icon checks, application startup, and silent install/uninstall cleanup on a clean Windows runner.
 
-          The installer includes pinned yt-dlp and CPython components. Deno and FFmpeg are not redistributed by this release; Sonic offers an explicit one-click setup that downloads their pinned artifacts directly from the upstream GitHub releases and verifies every file before use.
+          The installer includes pinned yt-dlp and CPython components. Deno and FFmpeg are not redistributed by this release; Sonic downloads their pinned artifacts directly from the upstream GitHub releases when they are needed and verifies every file before use. Manual setup remains available in Settings.
 
           The release includes separate CycloneDX SBOMs, exact Rust and npm dependency notices, pinned-tool provenance, FFmpeg build configuration, and third-party notices. Install only media you own or are authorized to download.
           '@ | Set-Content -Encoding utf8 -LiteralPath $notesPath

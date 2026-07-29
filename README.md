@@ -222,8 +222,8 @@ preview scoping, deletion, and diagnostics.
 - No product analytics and no hosted Sonic conversion backend.
 
 Sonic is **local-first, not offline**. Network access occurs when you inspect
-or acquire an authorized remote URL, explicitly install the pinned media
-engine, or check GitHub for a Sonic update.
+or acquire an authorized remote URL, prepare the pinned media engine, or check
+GitHub for a Sonic update.
 
 ## Download and updates
 
@@ -231,7 +231,7 @@ engine, or check GitHub for a Sonic update.
 
 [**Download the latest Windows x64 installer →**](https://github.com/eterniastudio/sonic/releases/latest)
 
-Sonic v0.2.2 targets Windows 10/11 x64 and Microsoft WebView2. The latest
+Sonic v0.2.3 targets Windows 10/11 x64 and Microsoft WebView2. The latest
 verified installer and its release artifacts are available from the link
 above.
 
@@ -271,10 +271,12 @@ become available.
 ### First-run media engine setup
 
 The installer contains pinned yt-dlp and CPython components. FFmpeg, ffprobe,
-and Deno are installed only after an explicit **Set up engine** action. Sonic
-downloads immutable pinned artifacts from upstream release hosts, verifies
-archive and executable hashes, records provenance, and re-verifies the tools
-before launch.
+and Deno are prepared when the first source needs them, or ahead of time with
+**Set up media tools** in Settings. Sonic downloads immutable pinned artifacts
+from upstream release hosts, verifies archive and executable hashes, records
+provenance, and re-verifies the tools before launch. Automatic app updates
+preserve this verified engine; if it is missing, source inspection repairs it
+once and continues automatically.
 
 - Approximate download: 180 MiB.
 - Local path: `%LOCALAPPDATA%\studio.eternia.sonic\media-engine`.
