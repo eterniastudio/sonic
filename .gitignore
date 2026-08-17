@@ -1,45 +1,25 @@
 ```
-# Dependencies
-node_modules/
-
 # Build artifacts
-dist/
-build/
 target/
+**/*.rs.bk
 
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# Dependencies
+**/Cargo.lock
 
-# Virtual environments
-venv/
-.venv/
+# Environment
 .env
 .env.local
+.env.*
 
-# IDE
+# Editors
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # Logs
 *.log
 
-# OS
-.DS_Store
-Thumbs.db
-
 # Temporary files
 *.tmp
-*.swp
-*.swo
-
-# Coverage
-.coverage
-coverage/
-htmlcov/
-
-# TypeScript
-*.tsbuildinfo
 ```

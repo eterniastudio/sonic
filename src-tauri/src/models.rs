@@ -715,6 +715,194 @@ pub struct DownloadProgress {
     pub error: Option<String>,
 }
 
+// v0.3 Library Intelligence types
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryRoot {
+    pub id: String,
+    pub label: String,
+    pub root_path: String,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryItemLocation {
+    pub id: String,
+    pub item_id: String,
+    pub root_id: String,
+    pub relative_audio_path: String,
+    pub relative_sidecar_path: String,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Tag {
+    pub id: String,
+    pub name: String,
+    pub color: Option<String>,
+    pub created_at_ms: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Collection {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub is_smart: bool,
+    pub query_json: Option<String>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateLibraryRootRequest {
+    pub label: String,
+    pub root_path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateLibraryRootRequest {
+    pub id: String,
+    pub label: Option<String>,
+    pub root_path: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RelinkLibraryRootRequest {
+    pub id: String,
+    pub new_root_path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportSidecarFolderRequest {
+    pub folder_path: String,
+    #[serde(default)]
+    pub recursive: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SidecarImportReport {
+    pub scanned_count: u64,
+    pub imported_count: u64,
+    pub skipped_count: u64,
+    pub error_count: u64,
+    pub errors: Vec<SidecarImportError>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SidecarImportError {
+    pub path: String,
+    pub error: String,
+    pub error_code: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkTagRequest {
+    pub item_ids: Vec<String>,
+    pub tag_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkRemoveTagRequest {
+    pub item_ids: Vec<String>,
+    pub tag_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkUpdateRequest {
+    pub item_ids: Vec<String>,
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub bpm: Option<f64>,
+    pub key: Option<String>,
+    pub camelot: Option<String>,
+    pub rating: Option<i64>,
+    pub is_favorite: Option<bool>,
+    pub status: Option<String>,
+    pub color_label: Option<String>,
+    pub preset_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkDeleteRequest {
+    pub item_ids: Vec<String>,
+    #[serde(default)]
+    pub delete_audio: bool,
+    #[serde(default)]
+    pub delete_sidecar: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateTagRequest {
+    pub name: String,
+    pub color: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateTagRequest {
+    pub id: String,
+    pub name: Option<String>,
+    pub color: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCollectionRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub is_smart: bool,
+    pub query_json: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCollectionRequest {
+    pub id: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub is_smart: Option<bool>,
+    pub query_json: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddToCollectionRequest {
+    pub collection_id: String,
+    pub item_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveFromCollectionRequest {
+    pub collection_id: String,
+    pub item_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateGroup {
+    pub sha256: String,
+    pub item_ids: Vec<String>,
+    pub detected_at_ms: i64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
