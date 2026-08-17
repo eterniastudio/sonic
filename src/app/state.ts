@@ -146,7 +146,7 @@ export type SonicAction =
   | { type: "moveItem"; itemId: string; direction: -1 | 1 }
   | { type: "selectItem"; itemId: string | null }
   | { type: "setQueuePaused"; paused: boolean }
-  | { type: "setLibrary"; items: LibraryItem[] }
+  | { type: "setLibrary"; items: LibraryItem[]; totalCount?: number; facets?: LibraryFacets; nextCursor?: string }
   | { type: "removeLibraryItem"; itemId: string }
   | { type: "selectLibraryItem"; itemId: string | null }
   | { type: "setSettings"; settings: SonicSettings }

@@ -423,6 +423,56 @@ pub struct LibraryQuery {
     pub missing: Option<bool>,
     pub limit: Option<u32>,
     pub cursor: Option<String>,
+    #[serde(default)]
+    pub sort: LibrarySort,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum LibrarySort {
+    #[default]
+    Newest,
+    Oldest,
+    Title,
+    Bpm,
+    Artist,
+    Format,
+}
+
+impl LibrarySort {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Newest => "newest",
+            Self::Oldest => "oldest",
+            Self::Title => "title",
+            Self::Bpm => "bpm",
+            Self::Artist => "artist",
+            Self::Format => "format",
+        }
+    }
+
+    pub fn from_db(value: &str) -> Option<Self> {
+        Some(match value {
+            "newest" | "" => Self::Newest,
+            "oldest" => Self::Oldest,
+            "title" => Self::Title,
+            "bpm" => Self::Bpm,
+            "artist" => Self::Artist,
+            "format" => Self::Format,
+            _ => return None,
+        })
+    }
+
+    pub fn sql_order(&self) -> &'static str {
+        match self {
+            Self::Newest => "created_at_ms DESC, id DESC",
+            Self::Oldest => "created_at_ms ASC, id ASC",
+            Self::Title => "title COLLATE NOCASE ASC, id ASC",
+            Self::Bpm => "bpm ASC NULLS LAST, id ASC",
+            Self::Artist => "artist COLLATE NOCASE ASC NULLS LAST, id ASC",
+            Self::Format => "format COLLATE NOCASE ASC, id ASC",
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -430,6 +480,27 @@ pub struct LibraryQuery {
 pub struct LibraryPage {
     pub items: Vec<LibraryItem>,
     pub next_cursor: Option<String>,
+    pub total_count: u64,
+    #[serde(default)]
+    pub facets: LibraryFacets,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryFacets {
+    #[serde(default)]
+    pub formats: Vec<FacetCount>,
+    #[serde(default)]
+    pub keys: Vec<FacetCount>,
+    #[serde(default)]
+    pub missing_count: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetCount {
+    pub value: String,
+    pub count: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

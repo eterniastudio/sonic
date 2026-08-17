@@ -8,6 +8,7 @@ import type {
   JobUpdate,
   LibraryFilters,
   LibraryItem,
+  LibraryPage,
   LibrarySort,
   PreviewAsset,
   QueueItem,
@@ -34,7 +35,7 @@ export interface SonicBridge {
   removeJob(jobId: string): Promise<boolean>;
   reorderQueue(jobIds: string[]): Promise<QueueSnapshot>;
   setQueuePaused(paused: boolean): Promise<QueueSnapshot>;
-  listLibrary(query?: string, filters?: LibraryFilters, sort?: LibrarySort): Promise<LibraryItem[]>;
+  listLibrary(query?: string, filters?: LibraryFilters, sort?: LibrarySort): Promise<LibraryPage>;
   getLibraryItem(itemId: string): Promise<LibraryItem>;
   reexportLibraryItem(itemId: string): Promise<QueueItem>;
   removeLibraryItem(itemId: string, deleteFile: boolean): Promise<boolean>;
