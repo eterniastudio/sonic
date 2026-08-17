@@ -1,0 +1,61 @@
+name: 🗄️ Database Migration Issue
+description: Report issues with database schema migrations or data integrity
+title: "[Migration]: "
+labels: ["database", "migration", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Database migration issues require careful handling. Please provide detailed information.
+
+  - type: input
+    id: from_version
+    attributes:
+      label: Source Schema Version
+      placeholder: e.g., 1
+    validations:
+      required: true
+
+  - type: input
+    id: to_version
+    attributes:
+      label: Target Schema Version
+      placeholder: e.g., 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: Migration Issue Description
+      description: What went wrong during the migration?
+      placeholder: Did it fail partway? Corrupt data? Lock up?
+    validations:
+      required: true
+
+  - type: textarea
+    id: recovery
+    attributes:
+      label: Recovery Steps Attempted
+      description: What have you tried to fix this?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Impact Assessment
+      options:
+        - label: Data loss occurred
+        - label: Application won't start
+        - label: Some features broken
+        - label: Performance degraded
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error Logs
+      description: Include full error output and stack traces
+      render: shell
+    validations:
+      required: true

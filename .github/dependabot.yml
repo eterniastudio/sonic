@@ -1,0 +1,68 @@
+version: 2
+updates:
+  # npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      production-deps:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "@types/*"
+          - "vitest"
+          - "@testing-library/*"
+          - "@playwright/*"
+      dev-deps:
+        patterns:
+          - "@types/*"
+          - "vitest"
+          - "@testing-library/*"
+          - "@playwright/*"
+          - "eslint*"
+          - "prettier*"
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "npm"
+
+  # Cargo dependencies
+  - package-ecosystem: "cargo"
+    directory: "/src-tauri"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      production-deps:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "proptest*"
+          - "criterion*"
+      dev-deps:
+        patterns:
+          - "proptest*"
+          - "criterion*"
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "rust"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(actions)"
+    labels:
+      - "dependencies"
+      - "ci"
