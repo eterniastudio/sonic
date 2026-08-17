@@ -272,7 +272,7 @@ jobs:
           path: release-candidate
 
       - name: Attest release build provenance
-        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: |
             release-candidate/src-tauri/target/release/bundle/nsis/Sonic_*_x64-setup.exe
