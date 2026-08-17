@@ -9,20 +9,25 @@ import { renderFilename } from "../domain/filename";
 import { externalOutputDirectory } from "../domain/path";
 import type {
   BootstrapPayload,
+  Collection,
   Diagnostics,
+  DuplicateGroup,
   ExportPreset,
   ExportRequest,
   FilenamePreviewRequest,
   LibraryFilters,
   LibraryItem,
   LibraryPage,
+  LibraryRoot,
   LibrarySort,
   MetadataDraft,
   PreviewAsset,
   QueueItem,
   QueueSnapshot,
+  SidecarImportReport,
   SonicSettings,
   SourceInput,
+  Tag,
 } from "../domain/types";
 import type { SonicBridge, Unsubscribe } from "./bridge-types";
 import {
@@ -648,5 +653,116 @@ export class NativeBridge implements SonicBridge {
         outputDirectory: this.settings.defaultOutputDirectory,
       };
     }
+  }
+
+  // Library roots (v0.3)
+  async listLibraryRoots() {
+    const value = await invoke<unknown>("list_library_roots");
+    return asArray(value) as LibraryRoot[];
+  }
+
+  async createLibraryRoot(name: string, path: string) {
+    const value = await invoke<unknown>("create_library_root", { name, path });
+    return value as LibraryRoot;
+  }
+
+  async updateLibraryRoot(id: number, patch: { name?: string; path?: string; enabled?: boolean }) {
+    const value = await invoke<unknown>("update_library_root", { id, ...patch });
+    return value as LibraryRoot;
+  }
+
+  async deleteLibraryRoot(id: number) {
+    await invoke("delete_library_root", { id });
+  }
+
+  async relinkLibraryRoot(oldRootId: number, newRootId: number) {
+    const value = await invoke<unknown>("relink_library_root", { oldRootId, newRootId });
+    return asNumber(value) ?? 0;
+  }
+
+  // Tags (v0.3)
+  async listTags() {
+    const value = await invoke<unknown>("list_tags");
+    return asArray(value) as Tag[];
+  }
+
+  async createTag(name: string, color?: string) {
+    const value = await invoke<unknown>("create_tag", { name, color });
+    return value as Tag;
+  }
+
+  async updateTag(id: number, patch: { name?: string; color?: string }) {
+    const value = await invoke<unknown>("update_tag", { id, ...patch });
+    return value as Tag;
+  }
+
+  async deleteTag(id: number) {
+    await invoke("delete_tag", { id });
+  }
+
+  async assignTagToItem(itemId: string, tagId: number) {
+    await invoke("assign_tag_to_item", { itemId, tagId });
+  }
+
+  async removeTagFromItem(itemId: string, tagId: number) {
+    await invoke("remove_tag_from_item", { itemId, tagId });
+  }
+
+  // Collections (v0.3)
+  async listCollections() {
+    const value = await invoke<unknown>("list_collections");
+    return asArray(value) as Collection[];
+  }
+
+  async createCollection(name: string, description?: string) {
+    const value = await invoke<unknown>("create_collection", { name, description });
+    return value as Collection;
+  }
+
+  async updateCollection(id: number, patch: { name?: string; description?: string }) {
+    const value = await invoke<unknown>("update_collection", { id, ...patch });
+    return value as Collection;
+  }
+
+  async deleteCollection(id: number) {
+    await invoke("delete_collection", { id });
+  }
+
+  async addItemsToCollection(collectionId: number, itemIds: string[]) {
+    await invoke("add_items_to_collection", { collectionId, itemIds });
+  }
+
+  async removeItemsFromCollection(collectionId: number, itemIds: string[]) {
+    await invoke("remove_items_from_collection", { collectionId, itemIds });
+  }
+
+  // Bulk actions (v0.3)
+  async bulkTagItems(itemIds: string[], tagId: number) {
+    await invoke("bulk_tag_items", { itemIds, tagId });
+  }
+
+  async bulkUpdateItems(itemIds: string[], patch: Partial<LibraryItem>) {
+    await invoke("bulk_update_items", { itemIds, patch });
+  }
+
+  async bulkDeleteItems(itemIds: string[], deleteFiles: boolean) {
+    await invoke("bulk_delete_items", { itemIds, deleteFiles });
+  }
+
+  // Duplicate detection (v0.3)
+  async findDuplicatesBySha256() {
+    const value = await invoke<unknown>("find_duplicates_by_sha256");
+    return asArray(value) as DuplicateGroup[];
+  }
+
+  async findDuplicatesBySource() {
+    const value = await invoke<unknown>("find_duplicates_by_source");
+    return asArray(value) as DuplicateGroup[];
+  }
+
+  // Sidecar import (v0.3)
+  async scanSidecarFolder(folderPath: string, recursive: boolean) {
+    const value = await invoke<unknown>("scan_sidecar_folder", { folderPath, recursive });
+    return value as SidecarImportReport;
   }
 }

@@ -90,6 +90,29 @@ export type SonicContextValue = {
   setDropActive(active: boolean): void;
   dismissError(): void;
   setShortcutsOpen(open: boolean): void;
+  // v0.3 Library Intelligence
+  listLibraryRoots(): Promise<void>;
+  createLibraryRoot(name: string, path: string): Promise<void>;
+  updateLibraryRoot(id: number, patch: { name?: string; path?: string; enabled?: boolean }): Promise<void>;
+  deleteLibraryRoot(id: number): Promise<void>;
+  listTags(): Promise<void>;
+  createTag(name: string, color?: string): Promise<void>;
+  updateTag(id: number, patch: { name?: string; color?: string }): Promise<void>;
+  deleteTag(id: number): Promise<void>;
+  assignTagToItem(itemId: string, tagId: number): Promise<void>;
+  removeTagFromItem(itemId: string, tagId: number): Promise<void>;
+  listCollections(): Promise<void>;
+  createCollection(name: string, description?: string): Promise<void>;
+  updateCollection(id: number, patch: { name?: string; description?: string }): Promise<void>;
+  deleteCollection(id: number): Promise<void>;
+  addItemsToCollection(collectionId: number, itemIds: string[]): Promise<void>;
+  removeItemsFromCollection(collectionId: number, itemIds: string[]): Promise<void>;
+  bulkTagItems(itemIds: string[], tagId: number): Promise<void>;
+  bulkDeleteItems(itemIds: string[], deleteFiles: boolean): Promise<void>;
+  findDuplicatesBySha256(): Promise<void>;
+  scanSidecarFolder(folderPath: string, recursive: boolean): Promise<void>;
+  toggleTagSelection(tagId: number): void;
+  selectCollection(collectionId: number | null): void;
 };
 
 const SonicContext = createContext<SonicContextValue | null>(null);
@@ -674,6 +697,102 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     try { await bridge.openSource(source); } catch (error) { setError(error); }
   }, [bridge, setError]);
 
+  // v0.3 Library Intelligence callbacks
+  const listLibraryRoots = useCallback(async () => {
+    try { dispatch({ type: "setLibraryRoots", roots: await bridge.listLibraryRoots() }); } catch (error) { setError(error); }
+  }, [bridge, setError]);
+
+  const createLibraryRoot = useCallback(async (name: string, path: string) => {
+    try { await bridge.createLibraryRoot(name, path); await listLibraryRoots(); dispatch({ type: "announce", message: "Library root created." }); } catch (error) { setError(error); }
+  }, [bridge, listLibraryRoots, setError]);
+
+  const updateLibraryRoot = useCallback(async (id: number, patch: { name?: string; path?: string; enabled?: boolean }) => {
+    try { await bridge.updateLibraryRoot(id, patch); await listLibraryRoots(); dispatch({ type: "announce", message: "Library root updated." }); } catch (error) { setError(error); }
+  }, [bridge, listLibraryRoots, setError]);
+
+  const deleteLibraryRoot = useCallback(async (id: number) => {
+    try { await bridge.deleteLibraryRoot(id); await listLibraryRoots(); dispatch({ type: "announce", message: "Library root deleted." }); } catch (error) { setError(error); }
+  }, [bridge, listLibraryRoots, setError]);
+
+  const listTags = useCallback(async () => {
+    try { dispatch({ type: "setTags", tags: await bridge.listTags() }); } catch (error) { setError(error); }
+  }, [bridge, setError]);
+
+  const createTag = useCallback(async (name: string, color?: string) => {
+    try { await bridge.createTag(name, color); await listTags(); dispatch({ type: "announce", message: "Tag created." }); } catch (error) { setError(error); }
+  }, [bridge, listTags, setError]);
+
+  const updateTag = useCallback(async (id: number, patch: { name?: string; color?: string }) => {
+    try { await bridge.updateTag(id, patch); await listTags(); dispatch({ type: "announce", message: "Tag updated." }); } catch (error) { setError(error); }
+  }, [bridge, listTags, setError]);
+
+  const deleteTag = useCallback(async (id: number) => {
+    try { await bridge.deleteTag(id); await listTags(); dispatch({ type: "announce", message: "Tag deleted." }); } catch (error) { setError(error); }
+  }, [bridge, listTags, setError]);
+
+  const assignTagToItem = useCallback(async (itemId: string, tagId: number) => {
+    try { await bridge.assignTagToItem(itemId, tagId); dispatch({ type: "announce", message: "Tag assigned." }); } catch (error) { setError(error); }
+  }, [bridge, setError]);
+
+  const removeTagFromItem = useCallback(async (itemId: string, tagId: number) => {
+    try { await bridge.removeTagFromItem(itemId, tagId); dispatch({ type: "announce", message: "Tag removed." }); } catch (error) { setError(error); }
+  }, [bridge, setError]);
+
+  const listCollections = useCallback(async () => {
+    try { dispatch({ type: "setCollections", collections: await bridge.listCollections() }); } catch (error) { setError(error); }
+  }, [bridge, setError]);
+
+  const createCollection = useCallback(async (name: string, description?: string) => {
+    try { await bridge.createCollection(name, description); await listCollections(); dispatch({ type: "announce", message: "Collection created." }); } catch (error) { setError(error); }
+  }, [bridge, listCollections, setError]);
+
+  const updateCollection = useCallback(async (id: number, patch: { name?: string; description?: string }) => {
+    try { await bridge.updateCollection(id, patch); await listCollections(); dispatch({ type: "announce", message: "Collection updated." }); } catch (error) { setError(error); }
+  }, [bridge, listCollections, setError]);
+
+  const deleteCollection = useCallback(async (id: number) => {
+    try { await bridge.deleteCollection(id); await listCollections(); dispatch({ type: "announce", message: "Collection deleted." }); } catch (error) { setError(error); }
+  }, [bridge, listCollections, setError]);
+
+  const addItemsToCollection = useCallback(async (collectionId: number, itemIds: string[]) => {
+    try { await bridge.addItemsToCollection(collectionId, itemIds); dispatch({ type: "announce", message: "Items added to collection." }); } catch (error) { setError(error); }
+  }, [bridge, setError]);
+
+  const removeItemsFromCollection = useCallback(async (collectionId: number, itemIds: string[]) => {
+    try { await bridge.removeItemsFromCollection(collectionId, itemIds); dispatch({ type: "announce", message: "Items removed from collection." }); } catch (error) { setError(error); }
+  }, [bridge, setError]);
+
+  const bulkTagItems = useCallback(async (itemIds: string[], tagId: number) => {
+    try { await bridge.bulkTagItems(itemIds, tagId); dispatch({ type: "announce", message: `Tagged ${itemIds.length} items.` }); } catch (error) { setError(error); }
+  }, [bridge, setError]);
+
+  const bulkDeleteItems = useCallback(async (itemIds: string[], deleteFiles: boolean) => {
+    try { await bridge.bulkDeleteItems(itemIds, deleteFiles); dispatch({ type: "announce", message: `Deleted ${itemIds.length} items.` }); } catch (error) { setError(error); }
+  }, [bridge, setError]);
+
+  const findDuplicatesBySha256 = useCallback(async () => {
+    try {
+      const groups = await bridge.findDuplicatesBySha256();
+      const count = groups.filter((g) => g.items.length > 1).length;
+      dispatch({ type: "announce", message: count ? `Found ${count} duplicate groups.` : "No duplicates found." });
+    } catch (error) { setError(error); }
+  }, [bridge, setError]);
+
+  const scanSidecarFolder = useCallback(async (folderPath: string, recursive: boolean) => {
+    try {
+      const report = await bridge.scanSidecarFolder(folderPath, recursive);
+      dispatch({ type: "announce", message: `Imported ${report.importedCount} of ${report.scannedCount} sidecars.` });
+    } catch (error) { setError(error); }
+  }, [bridge, setError]);
+
+  const toggleTagSelection = useCallback((tagId: number) => {
+    dispatch({ type: "toggleTagSelection", tagId });
+  }, []);
+
+  const selectCollection = useCallback((collectionId: number | null) => {
+    dispatch({ type: "selectCollection", collectionId });
+  }, []);
+
   const chooseOutputDirectory = useCallback(async (itemId?: string, baseSettings?: SonicSettings) => {
     const current = itemId ? stateRef.current.jobsById[itemId]?.outputDirectory : stateRef.current.settings.defaultOutputDirectory;
     try {
@@ -789,12 +908,42 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     setDropActive: (active) => dispatch({ type: "setDropActive", active }),
     dismissError: () => dispatch({ type: "setError", error: null }),
     setShortcutsOpen: (open) => dispatch({ type: "setShortcutsOpen", open }),
+    // v0.3 Library Intelligence
+    listLibraryRoots,
+    createLibraryRoot,
+    updateLibraryRoot,
+    deleteLibraryRoot,
+    listTags,
+    createTag,
+    updateTag,
+    deleteTag,
+    assignTagToItem,
+    removeTagFromItem,
+    listCollections,
+    createCollection,
+    updateCollection,
+    deleteCollection,
+    addItemsToCollection,
+    removeItemsFromCollection,
+    bulkTagItems,
+    bulkDeleteItems,
+    findDuplicatesBySha256,
+    scanSidecarFolder,
+    toggleTagSelection,
+    selectCollection,
   }), [
     addLocalPaths, addUrls, bridge, cancelItem, checkForUpdates, chooseOutputDirectory, clearCompleted, enqueueAllReady,
     enqueueItem, exportDiagnostics, importFiles, installUpdate, loadPreview, moveItem, openSource, prepareEngine,
     refreshDiagnostics, refreshFilename, refreshLibrary, releasePreview, removeItem, removeLibraryItem,
     reexportLibraryItem, retryItem, revealPath, saveQueuedItem, saveSettings, setQueuePaused, state,
     updateItem, updateMetadata, updater,
+    // v0.3 callbacks
+    listLibraryRoots, createLibraryRoot, updateLibraryRoot, deleteLibraryRoot,
+    listTags, createTag, updateTag, deleteTag, assignTagToItem, removeTagFromItem,
+    listCollections, createCollection, updateCollection, deleteCollection,
+    addItemsToCollection, removeItemsFromCollection,
+    bulkTagItems, bulkDeleteItems, findDuplicatesBySha256, scanSidecarFolder,
+    toggleTagSelection, selectCollection,
   ]);
 
   return <SonicContext.Provider value={value}>{children}</SonicContext.Provider>;

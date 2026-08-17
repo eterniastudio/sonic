@@ -333,3 +333,44 @@ export type LibraryPage = {
   totalCount: number;
   facets: LibraryFacets;
 };
+
+export type LibraryRoot = {
+  id: number;
+  name: string;
+  path: string;
+  enabled: boolean;
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Tag = {
+  id: number;
+  name: string;
+  color?: string;
+  itemCount: number;
+};
+
+export type Collection = {
+  id: number;
+  name: string;
+  description?: string;
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DuplicateGroup = {
+  fingerprint: string;
+  fingerprintType: "sha256" | "source";
+  items: LibraryItem[];
+};
+
+export type SidecarImportReport = {
+  scannedCount: number;
+  importedCount: number;
+  skippedCount: number;
+  errorCount: number;
+  errors: Array<{ path: string; error: string }>;
+  imported: LibraryItem[];
+};
