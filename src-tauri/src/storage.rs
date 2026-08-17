@@ -19,7 +19,7 @@ use crate::{
     },
 };
 
-pub const DB_SCHEMA_VERSION: u32 = 1;
+pub const DB_SCHEMA_VERSION: u32 = 2;
 const APPLICATION_ID: i64 = 0x534F_4E49; // "SONI"
 
 #[derive(Clone)]
@@ -769,71 +769,157 @@ impl Repository {
 
     pub fn list_library(&self, query: &LibraryQuery) -> AppResult<LibraryPage> {
         let connection = self.lock()?;
-        let mut statement = connection
-            .prepare("SELECT * FROM library_items ORDER BY created_at_ms DESC LIMIT 1000")?;
-        let mut items = statement
-            .query_map([], row_to_library_item)?
+        
+        // Build SQL WHERE clause from query filters
+        let mut where_clauses = Vec::new();
+        let mut params: Vec<&dyn rusqlite::ToSql> = Vec::new();
+        
+        if let Some(search) = query.search.as_deref().filter(|s| !s.trim().is_empty()) {
+            let search_pattern = format!("%{}%", search.trim());
+            where_clauses.push("(title LIKE ? OR artist LIKE ? OR audio_path LIKE ? OR musical_key LIKE ? OR camelot LIKE ?)");
+            params.push(&search_pattern);
+            params.push(&search_pattern);
+            params.push(&search_pattern);
+            params.push(&search_pattern);
+            params.push(&search_pattern);
+        }
+        
+        if let Some(key) = query.key.as_deref().filter(|k| !k.is_empty()) {
+            where_clauses.push("UPPER(musical_key) = UPPER(?)");
+            params.push(key);
+        }
+        
+        if let Some(bpm_min) = query.bpm_min {
+            where_clauses.push("bpm >= ?");
+            params.push(&bpm_min);
+        }
+        
+        if let Some(bpm_max) = query.bpm_max {
+            where_clauses.push("bpm <= ?");
+            params.push(&bpm_max);
+        }
+        
+        if let Some(format) = query.format.as_deref().filter(|f| !f.is_empty()) {
+            where_clauses.push("UPPER(format) = UPPER(?)");
+            params.push(format);
+        }
+        
+        if let Some(missing) = query.missing {
+            where_clauses.push("missing = ?");
+            params.push(&(if missing { 1i64 } else { 0i64 }));
+        }
+        
+        let where_sql = if where_clauses.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", where_clauses.join(" AND "))
+        };
+        
+        // Get total count with filters applied
+        let count_sql = format!("SELECT COUNT(*) FROM library_items {}", where_sql);
+        let total_count: u64 = connection
+            .query_row(&count_sql, rusqlite::params_from_iter(params.iter()), |row| row.get(0))?;
+        
+        // Build ORDER BY from sort field
+        let order_by = query.sort.sql_order();
+        
+        // Keyset pagination: parse cursor as "created_at_ms:id" format
+        let (cursor_filter, cursor_params): (String, Vec<&dyn rusqlite::ToSql>) = 
+            query.cursor.as_deref()
+                .and_then(|c| c.split_once(':'))
+                .and_then(|(ts, id)| {
+                    ts.parse::<i64>().ok().map(|created_at| {
+                        match query.sort {
+                            LibrarySort::Newest => {
+                                (format!("AND (created_at_ms < ? OR (created_at_ms = ? AND id < ?))"), 
+                                 vec![&created_at as &dyn rusqlite::ToSql, &created_at, id])
+                            }
+                            LibrarySort::Oldest => {
+                                (format!("AND (created_at_ms > ? OR (created_at_ms = ? AND id > ?))"),
+                                 vec![&created_at as &dyn rusqlite::ToSql, &created_at, id])
+                            }
+                            _ => {
+                                // For non-time sorts, use simple offset
+                                (String::new(), vec![])
+                            }
+                        }
+                    })
+                })
+                .unwrap_or_else(|| (String::new(), vec![]));
+        
+        let limit = query.limit.unwrap_or(50).clamp(1, 100) as i64;
+        
+        let sql = format!(
+            "SELECT * FROM library_items {} {} ORDER BY {} LIMIT ?",
+            where_sql, cursor_filter, order_by
+        );
+        
+        let mut all_params = params;
+        all_params.extend(cursor_params);
+        all_params.push(&limit);
+        
+        let mut statement = connection.prepare(&sql)?;
+        let items = statement
+            .query_map(rusqlite::params_from_iter(all_params.iter()), row_to_library_item)?
             .collect::<Result<Vec<_>, _>>()?;
-        let search = query
-            .search
-            .as_deref()
-            .map(str::trim)
-            .filter(|v| !v.is_empty())
-            .map(str::to_lowercase);
-        items.retain_mut(|item| {
-            item.missing = !Path::new(&item.audio_path).is_file();
-            search.as_ref().is_none_or(|search| {
-                item.title.to_lowercase().contains(search)
-                    || item
-                        .artist
-                        .as_deref()
-                        .unwrap_or("")
-                        .to_lowercase()
-                        .contains(search)
-                    || Path::new(&item.audio_path)
-                        .file_name()
-                        .map(|value| value.to_string_lossy().to_lowercase().contains(search))
-                        .unwrap_or(false)
-                    || item
-                        .key
-                        .as_deref()
-                        .unwrap_or("")
-                        .to_lowercase()
-                        .contains(search)
-                    || item
-                        .camelot
-                        .as_deref()
-                        .unwrap_or("")
-                        .to_lowercase()
-                        .contains(search)
-                    || item.bpm.is_some_and(|bpm| bpm.to_string().contains(search))
-            }) && query.key.as_ref().is_none_or(|key| {
-                item.key
-                    .as_deref()
-                    .is_some_and(|value| value.eq_ignore_ascii_case(key))
-            }) && query
-                .bpm_min
-                .is_none_or(|min| item.bpm.is_some_and(|value| value >= min))
-                && query
-                    .bpm_max
-                    .is_none_or(|max| item.bpm.is_some_and(|value| value <= max))
-                && query
-                    .format
-                    .as_ref()
-                    .is_none_or(|format| item.format.eq_ignore_ascii_case(format))
-                && query.missing.is_none_or(|missing| item.missing == missing)
-        });
-        let offset = query
-            .cursor
-            .as_deref()
-            .and_then(|v| v.parse::<usize>().ok())
-            .unwrap_or(0);
-        let limit = query.limit.unwrap_or(50).clamp(1, 100) as usize;
-        let page = items.iter().skip(offset).take(limit).cloned().collect();
-        let next = (offset + limit < items.len()).then(|| (offset + limit).to_string());
+        
+        // Update missing status for returned items
+        let mut typed_items: Vec<LibraryItem> = items.into_iter()
+            .map(|mut item| {
+                item.missing = !Path::new(&item.audio_path).is_file();
+                item
+            })
+            .collect();
+        
+        // Calculate facets
+        let mut facets = LibraryFacets::default();
+        
+        // Missing count
+        facets.missing_count = connection
+            .query_row("SELECT COUNT(*) FROM library_items WHERE missing = 1", [], |row| row.get(0))?;
+        
+        // Format facets
+        let mut fmt_stmt = connection.prepare(
+            "SELECT format, COUNT(*) as cnt FROM library_items GROUP BY format ORDER BY cnt DESC"
+        )?;
+        facets.formats = fmt_stmt
+            .query_map([], |row| {
+                Ok(FacetCount {
+                    value: row.get::<_, String>(0)?,
+                    count: row.get::<_, u64>(1)?,
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+        
+        // Key facets
+        let mut key_stmt = connection.prepare(
+            "SELECT musical_key, COUNT(*) as cnt FROM library_items WHERE musical_key IS NOT NULL GROUP BY musical_key ORDER BY cnt DESC LIMIT 20"
+        )?;
+        facets.keys = key_stmt
+            .query_map([], |row| {
+                Ok(FacetCount {
+                    value: row.get::<_, String>(0)?,
+                    count: row.get::<_, u64>(1)?,
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+        
+        // Next cursor using keyset pagination
+        let next_cursor = if items.len() == limit as usize {
+            items.last().map(|item| {
+                format!("{}:{}", item.created_at_ms, item.id)
+            })
+        } else {
+            None
+        };
+        
         Ok(LibraryPage {
-            items: page,
-            next_cursor: next,
+            items: typed_items,
+            next_cursor,
+            total_count,
+            facets,
         })
     }
 

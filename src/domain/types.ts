@@ -314,4 +314,22 @@ export type LibraryFilters = {
   missingOnly: boolean;
 };
 
-export type LibrarySort = "newest" | "oldest" | "title" | "bpm";
+export type LibrarySort = "newest" | "oldest" | "title" | "bpm" | "artist" | "format";
+
+export type FacetCount = {
+  value: string;
+  count: number;
+};
+
+export type LibraryFacets = {
+  formats: FacetCount[];
+  keys: FacetCount[];
+  missingCount: number;
+};
+
+export type LibraryPage = {
+  items: LibraryItem[];
+  nextCursor?: string;
+  totalCount: number;
+  facets: LibraryFacets;
+};

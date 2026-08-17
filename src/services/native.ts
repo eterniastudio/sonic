@@ -15,6 +15,7 @@ import type {
   FilenamePreviewRequest,
   LibraryFilters,
   LibraryItem,
+  LibraryPage,
   LibrarySort,
   MetadataDraft,
   PreviewAsset,
@@ -427,7 +428,7 @@ export class NativeBridge implements SonicBridge {
     return snapshot;
   }
 
-  async listLibrary(query = "", filters?: LibraryFilters, _sort?: LibrarySort) {
+  async listLibrary(query = "", filters?: LibraryFilters, sort?: LibrarySort) {
     const value = asRecord(await invoke<unknown>("list_library", {
       query: {
         search: query.trim() || null,
@@ -436,11 +437,12 @@ export class NativeBridge implements SonicBridge {
         bpmMax: optionalNumber(filters?.bpmMax ?? "") ?? null,
         format: filters?.format || null,
         missing: filters?.missingOnly ? true : null,
-        limit: 500,
+        limit: 100,
         cursor: null,
+        sort: sort ?? "newest",
       },
     }));
-    return asArray(value.items ?? value.library).map(normalizeLibraryItem);
+    return value as LibraryPage;
   }
 
   async getLibraryItem(itemId: string) {
