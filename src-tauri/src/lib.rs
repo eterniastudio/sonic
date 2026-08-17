@@ -62,7 +62,32 @@ pub fn run() {
             commands::prepare_media_engine,
             commands::inspect_video,
             commands::start_download,
-            commands::cancel_download
+            commands::cancel_download,
+            // v0.3 Library Intelligence
+            commands::create_library_root,
+            commands::list_library_roots,
+            commands::update_library_root,
+            commands::delete_library_root,
+            commands::relink_library_root,
+            commands::create_tag,
+            commands::list_tags,
+            commands::update_tag,
+            commands::delete_tag,
+            commands::assign_tag_to_item,
+            commands::remove_tag_from_item,
+            commands::get_item_tags,
+            commands::create_collection,
+            commands::list_collections,
+            commands::update_collection,
+            commands::delete_collection,
+            commands::add_items_to_collection,
+            commands::remove_items_from_collection,
+            commands::bulk_tag_items,
+            commands::bulk_update_items,
+            commands::bulk_delete_items,
+            commands::find_duplicates_by_sha256,
+            commands::find_duplicates_by_source_fingerprint,
+            commands::scan_sidecar_folder
         ])
         .build(tauri::generate_context!())
         .expect("error while building Sonic");

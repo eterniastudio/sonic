@@ -1,106 +1,39 @@
 ```
-# Build artifacts
+# Rust/Cargo
 target/
+Cargo.lock
+
+# Tauri
+src-tauri/target/
 **/*.rs.bk
-dist/
-build/
-.next/
-out/
 
 # Dependencies
 node_modules/
-**/Cargo.lock
-**/package-lock.json
-**/yarn.lock
-**/pnpm-lock.yaml
+vendor/
+
+# Build artifacts
+dist/
+build/
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Logs
+*.log
 
 # Environment
 .env
 .env.local
 .env.*
-*.env
 
-# Editors
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
+
+# OS
 .DS_Store
 Thumbs.db
-
-# Logs
-*.log
-logs/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Temporary files
-*.tmp
-*.temp
-.tmp/
-.temp/
-
-# Database files
-*.sqlite
-*.sqlite3
-*.db
-*.bak
-database-backups/
-
-# Sidecar files (optional - uncomment if sidecars should not be committed)
-# *.sonic.json
-
-# Test coverage
-coverage/
-.nyc_output/
-
-# Rust
-**/Cargo.lock
-debug/
-**/*.pdb
-
-# TypeScript
-*.tsbuildinfo
-
-# Tauri
-src-tauri/target/
-src-tauri/Cargo.lock
-
-# OS files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Desktop.ini
-
-# IDE
-.vscode/settings.json
-.idea/workspace.xml
-
-# Secrets and credentials
-*.pem
-*.key
-*.cert
-secrets/
-credentials/
-
-# Audio cache
-audio-cache/
-previews/
-waveforms/
-
-# Export outputs
-exports/
-output/
-delivered/
-
-# Large test fixtures
-fixtures/large/
-test-data/**/*.wav
-test-data/**/*.mp3
-test-data/**/*.flac
 ```

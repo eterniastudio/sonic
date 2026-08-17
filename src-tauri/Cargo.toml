@@ -38,3 +38,4 @@ rusqlite = { version = "0.39.0", features = ["bundled", "serde_json"] }
 tokio = { version = "1", features = ["sync", "time"] }
 fs2 = "0.4"
 time = { version = "0.3", features = ["formatting"] }
+walkdir = "2"
