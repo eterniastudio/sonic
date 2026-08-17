@@ -1,25 +1,39 @@
 ```
-# Build artifacts
+# Rust/Cargo
 target/
+Cargo.lock
+
+# Tauri
+src-tauri/target/
 **/*.rs.bk
 
 # Dependencies
-**/Cargo.lock
+node_modules/
+vendor/
+
+# Build artifacts
+dist/
+build/
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Logs
+*.log
 
 # Environment
 .env
 .env.local
 .env.*
 
-# Editors
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Logs
-*.log
-
-# Temporary files
-*.tmp
+# OS
+.DS_Store
+Thumbs.db
 ```

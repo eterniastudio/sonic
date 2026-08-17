@@ -11,14 +11,17 @@ use crate::{
     },
     jobs::{emit_queue_snapshot, validate_enqueue_item, AppState},
     models::{
-        BootstrapSnapshot, DependencyStatus, DiagnosticsQueue, DiagnosticsSnapshot, DownloadFormat,
-        DownloadRequest, DownloadStarted, EnqueueExportsRequest, EnqueueItem,
+        AddToCollectionRequest, BootstrapSnapshot, BulkDeleteRequest, BulkTagRequest,
+        BulkUpdateRequest, Collection, CreateCollectionRequest, CreateLibraryRootRequest,
+        CreateTagRequest, DependencyStatus, DiagnosticsQueue, DiagnosticsSnapshot, DownloadFormat,
+        DownloadRequest, DownloadStarted, DuplicateGroup, EnqueueExportsRequest, EnqueueItem,
         ExportDiagnosticsRequest, ExportPreset, ExportPresetId, ExportSpec, ExportedDiagnostics,
         FilenamePreview, FilenamePreviewRequest, FinalMetadata, InspectSourceRequest, JobDetail,
-        JobPage, JobQuery, LibraryItem, LibraryPage, LibraryQuery, QueueJob, QueueSnapshot,
-        ReexportLibraryItemRequest, RemoveLibraryItemRequest, ReorderQueueRequest,
-        SetQueuePausedRequest, SettingsSnapshot, SourceInspection, SourceSpec,
-        UpdateQueuedJobRequest, UpdateSettingsRequest, VideoInfo,
+        JobPage, JobQuery, LibraryItem, LibraryPage, LibraryQuery, LibraryRoot, QueueJob,
+        QueueSnapshot, ReexportLibraryItemRequest, RemoveFromCollectionRequest,
+        RemoveLibraryItemRequest, ReorderQueueRequest, SetQueuePausedRequest, SettingsSnapshot,
+        SidecarImportReport, SourceInspection, SourceSpec, Tag, UpdateCollectionRequest,
+        UpdateLibraryRootRequest, UpdateQueuedJobRequest, UpdateSettingsRequest, VideoInfo,
     },
     presets::{export_presets, validate_metadata},
     sidecar::read_sidecar,
@@ -633,4 +636,210 @@ mod tests {
         assert!(value.get("source").is_none());
         assert!(value.get("title").is_none());
     }
+}
+
+// ==================== v0.3 Library Intelligence Commands ====================
+
+#[tauri::command]
+pub fn create_library_root(
+    state: State<'_, AppState>,
+    request: CreateLibraryRootRequest,
+) -> AppResult<String> {
+    let id = state
+        .repository
+        .create_library_root(&request.label, &request.root_path)?;
+    Ok(id)
+}
+
+#[tauri::command]
+pub fn list_library_roots(state: State<'_, AppState>) -> AppResult<Vec<LibraryRoot>> {
+    state.repository.list_library_roots()
+}
+
+#[tauri::command]
+pub fn update_library_root(
+    state: State<'_, AppState>,
+    request: UpdateLibraryRootRequest,
+) -> AppResult<()> {
+    state
+        .repository
+        .update_library_root(&request.id, request.label.as_deref(), request.root_path.as_deref())
+}
+
+#[tauri::command]
+pub fn delete_library_root(state: State<'_, AppState>, id: String) -> AppResult<()> {
+    state.repository.delete_library_root(&id)
+}
+
+#[tauri::command]
+pub fn relink_library_root(
+    state: State<'_, AppState>,
+    id: String,
+    new_root_path: String,
+) -> AppResult<usize> {
+    state.repository.relink_library_root(&id, &new_root_path)
+}
+
+#[tauri::command]
+pub fn create_tag(state: State<'_, AppState>, request: CreateTagRequest) -> AppResult<String> {
+    let id = state
+        .repository
+        .create_tag(&request.name, request.color.as_deref())?;
+    Ok(id)
+}
+
+#[tauri::command]
+pub fn list_tags(state: State<'_, AppState>) -> AppResult<Vec<(Tag, u64)>> {
+    state.repository.list_tags()
+}
+
+#[tauri::command]
+pub fn update_tag(
+    state: State<'_, AppState>,
+    id: String,
+    name: Option<String>,
+    color: Option<String>,
+) -> AppResult<()> {
+    state
+        .repository
+        .update_tag(&id, name.as_deref(), color.as_deref())
+}
+
+#[tauri::command]
+pub fn delete_tag(state: State<'_, AppState>, id: String) -> AppResult<()> {
+    state.repository.delete_tag(&id)
+}
+
+#[tauri::command]
+pub fn assign_tag_to_item(
+    state: State<'_, AppState>,
+    item_id: String,
+    tag_id: String,
+) -> AppResult<()> {
+    state.repository.assign_tag_to_item(&item_id, &tag_id)
+}
+
+#[tauri::command]
+pub fn remove_tag_from_item(
+    state: State<'_, AppState>,
+    item_id: String,
+    tag_id: String,
+) -> AppResult<()> {
+    state.repository.remove_tag_from_item(&item_id, &tag_id)
+}
+
+#[tauri::command]
+pub fn get_item_tags(state: State<'_, AppState>, item_id: String) -> AppResult<Vec<Tag>> {
+    state.repository.get_item_tags(&item_id)
+}
+
+#[tauri::command]
+pub fn create_collection(
+    state: State<'_, AppState>,
+    request: CreateCollectionRequest,
+) -> AppResult<String> {
+    let id = state.repository.create_collection(
+        &request.name,
+        request.description.as_deref(),
+        request.is_smart,
+        request.query_json.as_deref(),
+    )?;
+    Ok(id)
+}
+
+#[tauri::command]
+pub fn list_collections(state: State<'_, AppState>) -> AppResult<Vec<(Collection, u64)>> {
+    state.repository.list_collections()
+}
+
+#[tauri::command]
+pub fn update_collection(
+    state: State<'_, AppState>,
+    request: UpdateCollectionRequest,
+) -> AppResult<()> {
+    state.repository.update_collection(
+        &request.id,
+        request.name.as_deref(),
+        request.description.as_deref(),
+        request.is_smart,
+        request.query_json.as_deref(),
+    )
+}
+
+#[tauri::command]
+pub fn delete_collection(state: State<'_, AppState>, id: String) -> AppResult<()> {
+    state.repository.delete_collection(&id)
+}
+
+#[tauri::command]
+pub fn add_items_to_collection(
+    state: State<'_, AppState>,
+    request: AddToCollectionRequest,
+) -> AppResult<usize> {
+    let item_ids: Vec<&str> = request.item_ids.iter().map(|s| s.as_str()).collect();
+    state
+        .repository
+        .add_items_to_collection(&request.collection_id, &item_ids)
+}
+
+#[tauri::command]
+pub fn remove_items_from_collection(
+    state: State<'_, AppState>,
+    request: RemoveFromCollectionRequest,
+) -> AppResult<usize> {
+    let item_ids: Vec<&str> = request.item_ids.iter().map(|s| s.as_str()).collect();
+    state
+        .repository
+        .remove_items_from_collection(&request.collection_id, &item_ids)
+}
+
+#[tauri::command]
+pub fn bulk_tag_items(
+    state: State<'_, AppState>,
+    request: BulkTagRequest,
+) -> AppResult<usize> {
+    let item_ids: Vec<&str> = request.item_ids.iter().map(|s| s.as_str()).collect();
+    let tag_ids: Vec<&str> = request.tag_ids.iter().map(|s| s.as_str()).collect();
+    state.repository.bulk_tag_items(&item_ids, &tag_ids)
+}
+
+#[tauri::command]
+pub fn bulk_update_items(
+    state: State<'_, AppState>,
+    request: BulkUpdateRequest,
+) -> AppResult<usize> {
+    let item_ids: Vec<&str> = request.item_ids.iter().map(|s| s.as_str()).collect();
+    state.repository.bulk_update_items(&item_ids, &request)
+}
+
+#[tauri::command]
+pub fn bulk_delete_items(
+    state: State<'_, AppState>,
+    request: BulkDeleteRequest,
+) -> AppResult<usize> {
+    let item_ids: Vec<&str> = request.item_ids.iter().map(|s| s.as_str()).collect();
+    state.repository.bulk_delete_items(&item_ids)
+}
+
+#[tauri::command]
+pub fn find_duplicates_by_sha256(
+    state: State<'_, AppState>,
+) -> AppResult<Vec<DuplicateGroup>> {
+    state.repository.find_duplicates_by_sha256()
+}
+
+#[tauri::command]
+pub fn find_duplicates_by_source_fingerprint(
+    state: State<'_, AppState>,
+) -> AppResult<Vec<DuplicateGroup>> {
+    state.repository.find_duplicates_by_source_fingerprint()
+}
+
+#[tauri::command]
+pub fn scan_sidecar_folder(
+    state: State<'_, AppState>,
+    folder_path: String,
+    recursive: bool,
+) -> AppResult<SidecarImportReport> {
+    state.repository.scan_sidecar_folder(&folder_path, recursive)
 }

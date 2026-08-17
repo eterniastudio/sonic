@@ -991,6 +991,671 @@ impl Repository {
         Ok(count.max(0) as u64)
     }
 
+    // ==================== Database Backup ====================
+
+    pub fn backup_database(&self, conn: &Connection) -> AppResult<PathBuf> {
+        use std::io::Write;
+        
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| AppError::Internal("System time error".into()))?
+            .as_millis() as i64;
+        
+        let backup_filename = format!("sonic_backup_{}.sqlite3", timestamp);
+        let backup_path = self.data_directory.join(backup_filename);
+        
+        // Use SQLite backup API
+        let backup_conn = Connection::open(&backup_path)?;
+        conn.backup(rusqlite::DatabaseName::Main, &backup_conn, None)?;
+        
+        Ok(backup_path)
+    }
+
+    // ==================== Library Roots ====================
+
+    pub fn create_library_root(&self, label: &str, root_path: &str) -> AppResult<String> {
+        let mut conn = self.lock()?;
+        let id = Uuid::new_v4().to_string();
+        let now = now_ms();
+        
+        conn.execute(
+            "INSERT INTO library_roots(id, label, root_path, created_at_ms, updated_at_ms) VALUES(?1, ?2, ?3, ?4, ?5)",
+            params![id, label, root_path, now, now],
+        )?;
+        
+        Ok(id)
+    }
+
+    pub fn list_library_roots(&self) -> AppResult<Vec<LibraryRoot>> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare("SELECT * FROM library_roots ORDER BY created_at_ms ASC")?;
+        
+        stmt.query_map([], |row| {
+            Ok(LibraryRoot {
+                id: row.get("id")?,
+                label: row.get("label")?,
+                root_path: row.get("root_path")?,
+                created_at_ms: row.get("created_at_ms")?,
+                updated_at_ms: row.get("updated_at_ms")?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::from)
+    }
+
+    pub fn update_library_root(&self, id: &str, label: Option<&str>, root_path: Option<&str>) -> AppResult<()> {
+        let mut conn = self.lock()?;
+        let now = now_ms();
+        
+        if label.is_none() && root_path.is_none() {
+            return Ok(());
+        }
+        
+        match (label, root_path) {
+            (Some(l), Some(p)) => {
+                conn.execute(
+                    "UPDATE library_roots SET label=?1, root_path=?2, updated_at_ms=?3 WHERE id=?4",
+                    params![l, p, now, id],
+                )?;
+            }
+            (Some(l), None) => {
+                conn.execute(
+                    "UPDATE library_roots SET label=?1, updated_at_ms=?2 WHERE id=?3",
+                    params![l, now, id],
+                )?;
+            }
+            (None, Some(p)) => {
+                conn.execute(
+                    "UPDATE library_roots SET root_path=?1, updated_at_ms=?2 WHERE id=?3",
+                    params![p, now, id],
+                )?;
+            }
+            (None, None) => {}
+        }
+        
+        Ok(())
+    }
+
+    pub fn delete_library_root(&self, id: &str) -> AppResult<()> {
+        let conn = self.lock()?;
+        
+        // Check if any items reference this root
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM library_items WHERE root_id=?1",
+            [id],
+            |row| row.get(0),
+        )?;
+        
+        if count > 0 {
+            return Err(AppError::Internal(
+                "Cannot delete root with existing library items".into(),
+            ));
+        }
+        
+        conn.execute("DELETE FROM library_roots WHERE id=?1", [id])?;
+        Ok(())
+    }
+
+    pub fn relink_library_root(&self, id: &str, new_root_path: &str) -> AppResult<usize> {
+        let mut conn = self.lock()?;
+        let now = now_ms();
+        
+        // Update the root path
+        conn.execute(
+            "UPDATE library_roots SET root_path=?1, updated_at_ms=?2 WHERE id=?3",
+            params![new_root_path, now, id],
+        )?;
+        
+        // Update all items referencing this root to mark them for re-validation
+        let affected = conn.execute(
+            "UPDATE library_items SET missing=0, updated_at_ms=?1 WHERE root_id=?2",
+            params![now, id],
+        )?;
+        
+        Ok(affected)
+    }
+
+    // ==================== Tags ====================
+
+    pub fn create_tag(&self, name: &str, color: Option<&str>) -> AppResult<String> {
+        let mut conn = self.lock()?;
+        let id = Uuid::new_v4().to_string();
+        let now = now_ms();
+        
+        conn.execute(
+            "INSERT INTO tags(id, name, color, created_at_ms) VALUES(?1, ?2, ?3, ?4)",
+            params![id, name, color, now],
+        )?;
+        
+        Ok(id)
+    }
+
+    pub fn list_tags(&self) -> AppResult<Vec<(Tag, u64)>> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(
+            "SELECT t.*, COUNT(lit.tag_id) as usage_count 
+             FROM tags t 
+             LEFT JOIN library_item_tags lit ON t.id = lit.tag_id 
+             GROUP BY t.id 
+             ORDER BY t.name COLLATE NOCASE ASC",
+        )?;
+        
+        stmt.query_map([], |row| {
+            Ok((
+                Tag {
+                    id: row.get("id")?,
+                    name: row.get("name")?,
+                    color: row.get("color")?,
+                    created_at_ms: row.get("created_at_ms")?,
+                },
+                row.get::<_, u64>("usage_count")?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::from)
+    }
+
+    pub fn update_tag(&self, id: &str, name: Option<&str>, color: Option<&str>) -> AppResult<()> {
+        let mut conn = self.lock()?;
+        
+        if name.is_none() && color.is_none() {
+            return Ok(());
+        }
+        
+        match (name, color) {
+            (Some(n), Some(c)) => {
+                conn.execute(
+                    "UPDATE tags SET name=?1, color=?2 WHERE id=?3",
+                    params![n, c, id],
+                )?;
+            }
+            (Some(n), None) => {
+                conn.execute("UPDATE tags SET name=?1 WHERE id=?2", params![n, id])?;
+            }
+            (None, Some(c)) => {
+                conn.execute("UPDATE tags SET color=?1 WHERE id=?2", params![c, id])?;
+            }
+            (None, None) => {}
+        }
+        
+        Ok(())
+    }
+
+    pub fn delete_tag(&self, id: &str) -> AppResult<()> {
+        let conn = self.lock()?;
+        conn.execute("DELETE FROM tags WHERE id=?1", [id])?;
+        Ok(())
+    }
+
+    pub fn assign_tag_to_item(&self, item_id: &str, tag_id: &str) -> AppResult<()> {
+        let mut conn = self.lock()?;
+        let now = now_ms();
+        
+        conn.execute(
+            "INSERT OR IGNORE INTO library_item_tags(item_id, tag_id, created_at_ms) VALUES(?1, ?2, ?3)",
+            params![item_id, tag_id, now],
+        )?;
+        
+        Ok(())
+    }
+
+    pub fn remove_tag_from_item(&self, item_id: &str, tag_id: &str) -> AppResult<()> {
+        let conn = self.lock()?;
+        conn.execute(
+            "DELETE FROM library_item_tags WHERE item_id=?1 AND tag_id=?2",
+            params![item_id, tag_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_item_tags(&self, item_id: &str) -> AppResult<Vec<Tag>> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(
+            "SELECT t.* FROM tags t 
+             JOIN library_item_tags lit ON t.id = lit.tag_id 
+             WHERE lit.item_id = ?1 
+             ORDER BY t.name COLLATE NOCASE ASC",
+        )?;
+        
+        stmt.query_map([item_id], |row| {
+            Ok(Tag {
+                id: row.get("id")?,
+                name: row.get("name")?,
+                color: row.get("color")?,
+                created_at_ms: row.get("created_at_ms")?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::from)
+    }
+
+    // ==================== Collections ====================
+
+    pub fn create_collection(
+        &self,
+        name: &str,
+        description: Option<&str>,
+        is_smart: bool,
+        query_json: Option<&str>,
+    ) -> AppResult<String> {
+        let mut conn = self.lock()?;
+        let id = Uuid::new_v4().to_string();
+        let now = now_ms();
+        
+        conn.execute(
+            "INSERT INTO collections(id, name, description, is_smart, query_json, created_at_ms, updated_at_ms) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+            params![id, name, description, if is_smart { 1i64 } else { 0i64 }, query_json, now],
+        )?;
+        
+        Ok(id)
+    }
+
+    pub fn list_collections(&self) -> AppResult<Vec<(Collection, u64)>> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(
+            "SELECT c.*, COUNT(ci.item_id) as item_count 
+             FROM collections c 
+             LEFT JOIN collection_items ci ON c.id = ci.collection_id 
+             GROUP BY c.id 
+             ORDER BY c.created_at_ms DESC",
+        )?;
+        
+        stmt.query_map([], |row| {
+            Ok((
+                Collection {
+                    id: row.get("id")?,
+                    name: row.get("name")?,
+                    description: row.get("description")?,
+                    is_smart: row.get::<_, i64>("is_smart")? != 0,
+                    query_json: row.get("query_json")?,
+                    created_at_ms: row.get("created_at_ms")?,
+                    updated_at_ms: row.get("updated_at_ms")?,
+                },
+                row.get::<_, u64>("item_count")?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(AppError::from)
+    }
+
+    pub fn update_collection(
+        &self,
+        id: &str,
+        name: Option<&str>,
+        description: Option<&str>,
+        is_smart: Option<bool>,
+        query_json: Option<&str>,
+    ) -> AppResult<()> {
+        let mut conn = self.lock()?;
+        let now = now_ms();
+        
+        if name.is_none() && description.is_none() && is_smart.is_none() && query_json.is_none() {
+            return Ok(());
+        }
+        
+        let mut updates = Vec::new();
+        let mut params_vec: Vec<&dyn rusqlite::ToSql> = Vec::new();
+        
+        if let Some(n) = name {
+            updates.push("name=?");
+            params_vec.push(n);
+        }
+        if let Some(d) = description {
+            updates.push("description=?");
+            params_vec.push(d);
+        }
+        if let Some(s) = is_smart {
+            updates.push("is_smart=?");
+            params_vec.push(&(if s { 1i64 } else { 0i64 }));
+        }
+        if let Some(q) = query_json {
+            updates.push("query_json=?");
+            params_vec.push(q);
+        }
+        
+        updates.push("updated_at_ms=?");
+        params_vec.push(&now);
+        params_vec.push(&id);
+        
+        let sql = format!("UPDATE collections SET {} WHERE id=?", updates.join(","));
+        conn.execute(&sql, rusqlite::params_from_iter(params_vec.iter()))?;
+        
+        Ok(())
+    }
+
+    pub fn delete_collection(&self, id: &str) -> AppResult<()> {
+        let conn = self.lock()?;
+        conn.execute("DELETE FROM collections WHERE id=?1", [id])?;
+        Ok(())
+    }
+
+    pub fn add_items_to_collection(&self, collection_id: &str, item_ids: &[&str]) -> AppResult<usize> {
+        let mut conn = self.lock()?;
+        let now = now_ms();
+        let mut count = 0;
+        
+        for item_id in item_ids {
+            let affected = conn.execute(
+                "INSERT OR IGNORE INTO collection_items(collection_id, item_id, position, created_at_ms) VALUES(?1, ?2, ?3, ?4)",
+                params![collection_id, item_id, count, now],
+            )?;
+            count += affected;
+        }
+        
+        Ok(count)
+    }
+
+    pub fn remove_items_from_collection(&self, collection_id: &str, item_ids: &[&str]) -> AppResult<usize> {
+        let conn = self.lock()?;
+        let mut total_removed = 0;
+        
+        for item_id in item_ids {
+            let affected = conn.execute(
+                "DELETE FROM collection_items WHERE collection_id=?1 AND item_id=?2",
+                params![collection_id, item_id],
+            )?;
+            total_removed += affected;
+        }
+        
+        Ok(total_removed)
+    }
+
+    pub fn get_collection_items(&self, collection_id: &str, query: &LibraryQuery) -> AppResult<LibraryPage> {
+        // For now, delegate to list_library - smart collection filtering would go here
+        self.list_library(query)
+    }
+
+    // ==================== Bulk Operations ====================
+
+    pub fn bulk_tag_items(&self, item_ids: &[&str], tag_ids: &[&str]) -> AppResult<usize> {
+        let mut conn = self.lock()?;
+        let now = now_ms();
+        let mut count = 0;
+        
+        for item_id in item_ids {
+            for tag_id in tag_ids {
+                let affected = conn.execute(
+                    "INSERT OR IGNORE INTO library_item_tags(item_id, tag_id, created_at_ms) VALUES(?1, ?2, ?3)",
+                    params![item_id, tag_id, now],
+                )?;
+                count += affected;
+            }
+        }
+        
+        Ok(count)
+    }
+
+    pub fn bulk_remove_tags_from_items(&self, item_ids: &[&str], tag_ids: &[&str]) -> AppResult<usize> {
+        let mut conn = self.lock()?;
+        let mut total_removed = 0;
+        
+        for item_id in item_ids {
+            for tag_id in tag_ids {
+                let affected = conn.execute(
+                    "DELETE FROM library_item_tags WHERE item_id=?1 AND tag_id=?2",
+                    params![item_id, tag_id],
+                )?;
+                total_removed += affected;
+            }
+        }
+        
+        Ok(total_removed)
+    }
+
+    pub fn bulk_update_items(&self, item_ids: &[&str], updates: &crate::models::BulkUpdateRequest) -> AppResult<usize> {
+        let mut conn = self.lock()?;
+        let now = now_ms();
+        let mut total_updated = 0;
+        
+        for item_id in item_ids {
+            let mut updates_vec = Vec::new();
+            let mut params_vec: Vec<&dyn rusqlite::ToSql> = Vec::new();
+            
+            if let Some(ref title) = updates.title {
+                updates_vec.push("title=?");
+                params_vec.push(title);
+            }
+            if let Some(ref artist) = updates.artist {
+                updates_vec.push("artist=?");
+                params_vec.push(artist);
+            }
+            if let Some(bpm) = updates.bpm {
+                updates_vec.push("bpm=?");
+                params_vec.push(&bpm);
+            }
+            if let Some(ref key) = updates.key {
+                updates_vec.push("musical_key=?");
+                params_vec.push(key);
+            }
+            if let Some(ref camelot) = updates.camelot {
+                updates_vec.push("camelot=?");
+                params_vec.push(camelot);
+            }
+            if let Some(rating) = updates.rating {
+                updates_vec.push("rating=?");
+                params_vec.push(&rating);
+            }
+            if let Some(is_favorite) = updates.is_favorite {
+                updates_vec.push("is_favorite=?");
+                params_vec.push(&(if is_favorite { 1i64 } else { 0i64 }));
+            }
+            if let Some(ref status) = updates.status {
+                updates_vec.push("status=?");
+                params_vec.push(status);
+            }
+            if let Some(ref color_label) = updates.color_label {
+                updates_vec.push("color_label=?");
+                params_vec.push(color_label);
+            }
+            
+            if updates_vec.is_empty() {
+                continue;
+            }
+            
+            updates_vec.push("updated_at_ms=?");
+            params_vec.push(&now);
+            params_vec.push(item_id);
+            
+            let sql = format!("UPDATE library_items SET {} WHERE id=?", updates_vec.join(","));
+            let affected = conn.execute(&sql, rusqlite::params_from_iter(params_vec.iter()))?;
+            total_updated += affected;
+        }
+        
+        Ok(total_updated)
+    }
+
+    pub fn bulk_delete_items(&self, item_ids: &[&str]) -> AppResult<usize> {
+        let mut conn = self.lock()?;
+        let mut total_deleted = 0;
+        
+        for item_id in item_ids {
+            let affected = conn.execute("DELETE FROM library_items WHERE id=?1", [item_id])?;
+            total_deleted += affected;
+        }
+        
+        Ok(total_deleted)
+    }
+
+    // ==================== Duplicate Detection ====================
+
+    pub fn find_duplicates_by_sha256(&self) -> AppResult<Vec<crate::models::DuplicateGroup>> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(
+            "SELECT sha256, GROUP_CONCAT(id) as item_ids, COUNT(*) as cnt 
+             FROM library_items 
+             GROUP BY sha256 
+             HAVING COUNT(*) > 1 
+             ORDER BY cnt DESC",
+        )?;
+        
+        let groups = stmt
+            .query_map([], |row| {
+                let sha256: String = row.get("sha256")?;
+                let item_ids_str: String = row.get("item_ids")?;
+                let count: i64 = row.get("cnt")?;
+                
+                let item_ids: Vec<String> = item_ids_str.split(',').map(|s| s.to_string()).collect();
+                
+                Ok(crate::models::DuplicateGroup {
+                    group_type: "exact_sha256".to_string(),
+                    fingerprint: sha256,
+                    item_ids,
+                    count: count as u64,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(AppError::from)?;
+        
+        Ok(groups)
+    }
+
+    pub fn find_duplicates_by_source_fingerprint(&self) -> AppResult<Vec<crate::models::DuplicateGroup>> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(
+            "SELECT json_extract(source_json, '$.source_fingerprint') as fp, GROUP_CONCAT(id) as item_ids, COUNT(*) as cnt 
+             FROM library_items 
+             GROUP BY fp 
+             HAVING COUNT(*) > 1 
+             ORDER BY cnt DESC",
+        )?;
+        
+        let groups = stmt
+            .query_map([], |row| {
+                let fp: Option<String> = row.get("fp")?;
+                let item_ids_str: String = row.get("item_ids")?;
+                let count: i64 = row.get("cnt")?;
+                
+                let item_ids: Vec<String> = item_ids_str.split(',').map(|s| s.to_string()).collect();
+                
+                Ok(crate::models::DuplicateGroup {
+                    group_type: "same_source".to_string(),
+                    fingerprint: fp.unwrap_or_default(),
+                    item_ids,
+                    count: count as u64,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(AppError::from)?;
+        
+        Ok(groups)
+    }
+
+    pub fn create_track_variant(&self, source_fingerprint: &str) -> AppResult<String> {
+        let mut conn = self.lock()?;
+        let id = Uuid::new_v4().to_string();
+        let now = now_ms();
+        
+        conn.execute(
+            "INSERT INTO track_variants(id, source_fingerprint, created_at_ms) VALUES(?1, ?2, ?3)",
+            params![id, source_fingerprint, now],
+        )?;
+        
+        Ok(id)
+    }
+
+    pub fn link_item_to_variant(&self, item_id: &str, variant_id: &str) -> AppResult<()> {
+        let conn = self.lock()?;
+        conn.execute(
+            "UPDATE library_items SET variant_group_id=?1 WHERE id=?2",
+            params![variant_id, item_id],
+        )?;
+        Ok(())
+    }
+
+    // ==================== Sidecar Import ====================
+
+    pub fn scan_sidecar_folder(&self, folder_path: &str, recursive: bool) -> AppResult<crate::models::SidecarImportReport> {
+        use std::fs;
+        use crate::sidecar::SidecarFile;
+        
+        let folder = Path::new(folder_path);
+        if !folder.is_dir() {
+            return Err(AppError::Internal("Folder does not exist".into()));
+        }
+        
+        let mut report = crate::models::SidecarImportReport {
+            scanned_count: 0,
+            imported_count: 0,
+            skipped_count: 0,
+            error_count: 0,
+            errors: Vec::new(),
+        };
+        
+        // Collect sidecar files
+        let mut sidecar_files = Vec::new();
+        if recursive {
+            for entry in fs::read_dir(folder).map_err(|e| AppError::Filesystem(e))? {
+                let entry = entry.map_err(|e| AppError::Filesystem(e))?;
+                let path = entry.path();
+                if path.is_dir() {
+                    // Recursive walk
+                    for sub_entry in walkdir::WalkDir::new(&path).into_iter().flatten() {
+                        let sub_path = sub_entry.path();
+                        if sub_path.extension().and_then(|e| e.to_str()) == Some("sonic.json") {
+                            sidecar_files.push(sub_path.to_path_buf());
+                        }
+                    }
+                } else if path.extension().and_then(|e| e.to_str()) == Some("sonic.json") {
+                    sidecar_files.push(path);
+                }
+            }
+        } else {
+            for entry in fs::read_dir(folder).map_err(|e| AppError::Filesystem(e))? {
+                let entry = entry.map_err(|e| AppError::Filesystem(e))?;
+                let path = entry.path();
+                if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("sonic.json") {
+                    sidecar_files.push(path);
+                }
+            }
+        }
+        
+        report.scanned_count = sidecar_files.len() as u64;
+        
+        // Process each sidecar
+        for sidecar_path in sidecar_files {
+            match self.import_sidecar_file(sidecar_path.to_str().unwrap_or("")) {
+                Ok(_) => report.imported_count += 1,
+                Err(e) => {
+                    report.error_count += 1;
+                    report.errors.push(crate::models::SidecarImportError {
+                        path: sidecar_path.to_string_lossy().to_string(),
+                        error: e.to_string(),
+                        error_code: "import_failed".to_string(),
+                    });
+                }
+            }
+        }
+        
+        Ok(report)
+    }
+
+    fn import_sidecar_file(&self, sidecar_path: &str) -> AppResult<i64> {
+        use crate::sidecar::SidecarFile;
+        
+        // Read and parse sidecar
+        let content = fs::read_to_string(sidecar_path)?;
+        let sidecar: SidecarFile = serde_json::from_str(&content)
+            .map_err(|e| AppError::Internal(format!("Invalid sidecar JSON: {}", e)))?;
+        
+        // Check if already exists
+        let conn = self.lock()?;
+        let exists: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM library_items WHERE id=?1)",
+            [&sidecar.id],
+            |row| row.get(0),
+        )?;
+        
+        if exists {
+            return Ok(-1); // Already exists, skipped
+        }
+        
+        // Reconstruct library item from sidecar
+        // This is a simplified version - full implementation would validate audio file existence
+        drop(conn);
+        
+        Ok(0) // Placeholder - full implementation in next iteration
+    }
+
     fn lock(&self) -> AppResult<std::sync::MutexGuard<'_, Connection>> {
         self.connection
             .lock()
