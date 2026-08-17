@@ -534,7 +534,8 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     try {
       let library = stateRef.current.library;
       if (item.status === "completed" && item.nativeJobId) {
-        library = await bridge.listLibrary();
+        const page = await bridge.listLibrary();
+        library = page.items;
       }
       const mode = queueRemovalMode(item, library);
       if (mode === "retain-library") {
@@ -565,7 +566,10 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     const failures: string[] = [];
     let library = stateRef.current.library;
     try {
-      if (finished.some((item) => item.status === "completed")) library = await bridge.listLibrary();
+      if (finished.some((item) => item.status === "completed")) {
+        const page = await bridge.listLibrary();
+        library = page.items;
+      }
     } catch (error) {
       failures.push(errorMessage(error));
     }
@@ -636,7 +640,8 @@ export function SonicProvider({ children }: { children: ReactNode }) {
 
   const refreshLibrary = useCallback(async (query = "", filters?: LibraryFilters, sort?: LibrarySort) => {
     try {
-      dispatch({ type: "setLibrary", items: await bridge.listLibrary(query, filters, sort) });
+      const page = await bridge.listLibrary(query, filters, sort);
+      dispatch({ type: "setLibrary", items: page.items, totalCount: page.totalCount, facets: page.facets, nextCursor: page.nextCursor });
     } catch (error) {
       setError(error);
     }

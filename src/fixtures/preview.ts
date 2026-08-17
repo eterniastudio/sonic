@@ -493,7 +493,34 @@ export class BrowserPreviewBridge implements SonicBridge {
       if (sort === "bpm") return (a.bpm ?? Number.MAX_SAFE_INTEGER) - (b.bpm ?? Number.MAX_SAFE_INTEGER);
       return b.exportedAt.localeCompare(a.exportedAt);
     });
-    return structuredClone(result);
+    
+    // Calculate facets
+    const formatCounts = new Map<string, number>();
+    const keyCounts = new Map<string, number>();
+    let missingCount = 0;
+    
+    for (const item of result) {
+      formatCounts.set(item.format, (formatCounts.get(item.format) || 0) + 1);
+      if (item.key) {
+        keyCounts.set(item.key, (keyCounts.get(item.key) || 0) + 1);
+      }
+      if (!item.exists) missingCount++;
+    }
+    
+    const formats = Array.from(formatCounts.entries())
+      .map(([value, count]) => ({ value, count }))
+      .sort((a, b) => b.count - a.count);
+    
+    const keys = Array.from(keyCounts.entries())
+      .map(([value, count]) => ({ value, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20);
+    
+    return {
+      items: structuredClone(result),
+      totalCount: result.length,
+      facets: { formats, keys, missingCount },
+    };
   }
 
   async getLibraryItem(itemId: string) {
