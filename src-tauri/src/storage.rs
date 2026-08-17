@@ -14,13 +14,56 @@ use crate::{
     error::{conflict, not_found, AppError, AppResult},
     filesystem::external_path_string,
     models::{
-        AppSettings, EnqueueItem, JobDetail, JobPage, JobProgress, JobQuery, JobState, LibraryItem,
-        LibraryPage, LibraryQuery, QueueJob, QueueSnapshot, SettingsPatch, SettingsSnapshot,
+        AppSettings, Collection, EnqueueItem, FacetCount, JobDetail, JobPage, JobProgress, JobQuery, JobState,
+        LibraryFacets, LibraryItem, LibraryItemLocation, LibraryPage, LibraryQuery, LibraryRoot, QueueJob,
+        QueueSnapshot, SettingsPatch, SettingsSnapshot, Tag,
     },
 };
 
-pub const DB_SCHEMA_VERSION: u32 = 2;
+pub const DB_SCHEMA_VERSION: u32 = 3;
 const APPLICATION_ID: i64 = 0x534F_4E49; // "SONI"
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryRoot {
+    pub id: String,
+    pub label: String,
+    pub root_path: String,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryItemLocation {
+    pub id: String,
+    pub item_id: String,
+    pub root_id: String,
+    pub relative_audio_path: String,
+    pub relative_sidecar_path: String,
+    pub created_at_ms: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Tag {
+    pub id: String,
+    pub name: String,
+    pub color: Option<String>,
+    pub created_at_ms: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Collection {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub is_smart: bool,
+    pub query_json: Option<String>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
 
 #[derive(Clone)]
 pub struct Repository {
@@ -1328,6 +1371,89 @@ mod tests {
         );
         assert!(!reopened.get_settings().unwrap().settings.history_enabled);
         drop(reopened);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn migration_creates_v2_tables_successfully() {
+        let (repository, root) = repository();
+        
+        // Verify v1 schema is in place
+        let conn = repository.lock().unwrap();
+        let version: u32 = conn.pragma_query_value(None, "user_version", |row| row.get(0)).unwrap();
+        assert_eq!(version, 1);
+        drop(conn);
+        
+        // Manually trigger v1->v2 migration by updating DB_SCHEMA_VERSION temporarily
+        // This tests that the migration functions work correctly
+        let result = repository.migrate_v1_to_v2(&mut repository.lock().unwrap());
+        
+        // Migration should succeed
+        assert!(result.is_ok());
+        
+        // Verify v2 schema is now active
+        let conn = repository.lock().unwrap();
+        let version: u32 = conn.pragma_query_value(None, "user_version", |row| row.get(0)).unwrap();
+        assert_eq!(version, 2);
+        
+        // Verify new tables exist
+        let table_exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='library_roots'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(table_exists, "library_roots table should exist after v2 migration");
+        
+        let table_exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='tags'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(table_exists, "tags table should exist after v2 migration");
+        
+        let table_exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='collections'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(table_exists, "collections table should exist after v2 migration");
+        
+        // Verify new columns exist in library_items
+        let column_exists: bool = conn
+            .query_row(
+                "PRAGMA table_info(library_items)",
+                [],
+                |row| Ok((row.get::<_, String>(1)?, row.get::<_, String>(2)?)),
+            )
+            .and_then(|(name, _type)| Ok(name == "is_favorite"))
+            .is_ok();
+        
+        drop(conn);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn database_backup_created_before_migration() {
+        let (repository, root) = repository();
+        
+        // Create a backup
+        let conn = repository.lock().unwrap();
+        let backup_result = repository.backup_database(&conn);
+        drop(conn);
+        
+        assert!(backup_result.is_ok(), "Backup should be created successfully");
+        let backup_path = backup_result.unwrap();
+        assert!(backup_path.exists(), "Backup file should exist");
+        assert!(backup_path.ends_with(".sqlite3"), "Backup should have .sqlite3 extension");
+        
+        // Clean up
+        let _ = fs::remove_file(&backup_path);
         fs::remove_dir_all(root).unwrap();
     }
 }

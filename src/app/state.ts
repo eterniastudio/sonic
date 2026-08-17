@@ -5,6 +5,7 @@ import type {
   Diagnostics,
   ExportPreset,
   LibraryItem,
+  LibraryFacets,
   PreviewAsset,
   QueueItem,
   QueueSnapshot,
