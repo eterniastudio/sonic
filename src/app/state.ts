@@ -2,14 +2,17 @@ import { BUILTIN_PRESETS, DEFAULT_SETTINGS } from "../domain/defaults";
 import type {
   AppRoute,
   BootstrapPayload,
+  Collection,
   Diagnostics,
   ExportPreset,
-  LibraryItem,
   LibraryFacets,
+  LibraryItem,
+  LibraryRoot,
   PreviewAsset,
   QueueItem,
   QueueSnapshot,
   SonicSettings,
+  Tag,
 } from "../domain/types";
 
 export type PlayerState = {
@@ -29,6 +32,9 @@ export type SonicState = {
   jobOrder: string[];
   selectedJobId: string | null;
   library: LibraryItem[];
+  libraryTotalCount: number;
+  libraryFacets: LibraryFacets | null;
+  libraryNextCursor: string | null;
   selectedLibraryId: string | null;
   presets: ExportPreset[];
   settings: SonicSettings;
@@ -41,6 +47,12 @@ export type SonicState = {
   announcement: string;
   shortcutsOpen: boolean;
   player: PlayerState;
+  // v0.3 Library Intelligence
+  libraryRoots: LibraryRoot[];
+  tags: Tag[];
+  collections: Collection[];
+  selectedTagIds: number[];
+  selectedCollectionId: number | null;
 };
 
 const EMPTY_DIAGNOSTICS: Diagnostics = {
@@ -57,6 +69,9 @@ export const initialState: SonicState = {
   jobOrder: [],
   selectedJobId: null,
   library: [],
+  libraryTotalCount: 0,
+  libraryFacets: null,
+  libraryNextCursor: null,
   selectedLibraryId: null,
   presets: BUILTIN_PRESETS,
   settings: DEFAULT_SETTINGS,
@@ -76,6 +91,11 @@ export const initialState: SonicState = {
     currentTime: 0,
     loop: false,
   },
+  libraryRoots: [],
+  tags: [],
+  collections: [],
+  selectedTagIds: [],
+  selectedCollectionId: null,
 };
 
 export function moveQueueItem(order: string[], itemId: string, direction: -1 | 1) {
@@ -163,7 +183,13 @@ export type SonicAction =
   | { type: "playerPlaying"; playing: boolean }
   | { type: "playerTime"; time: number }
   | { type: "playerLoop"; loop: boolean }
-  | { type: "playerRelease" };
+  | { type: "playerRelease" }
+  // v0.3 Library Intelligence actions
+  | { type: "setLibraryRoots"; roots: LibraryRoot[] }
+  | { type: "setTags"; tags: Tag[] }
+  | { type: "setCollections"; collections: Collection[] }
+  | { type: "toggleTagSelection"; tagId: number }
+  | { type: "selectCollection"; collectionId: number | null };
 
 export function sonicReducer(state: SonicState, action: SonicAction): SonicState {
   switch (action.type) {
@@ -333,6 +359,23 @@ export function sonicReducer(state: SonicState, action: SonicAction): SonicState
       return { ...state, player: { ...state.player, loop: action.loop } };
     case "playerRelease":
       return { ...state, player: initialState.player };
+    // v0.3 Library Intelligence reducers
+    case "setLibraryRoots":
+      return { ...state, libraryRoots: action.roots };
+    case "setTags":
+      return { ...state, tags: action.tags };
+    case "setCollections":
+      return { ...state, collections: action.collections };
+    case "toggleTagSelection": {
+      const current = state.selectedTagIds;
+      const exists = current.includes(action.tagId);
+      return {
+        ...state,
+        selectedTagIds: exists ? current.filter((id) => id !== action.tagId) : [...current, action.tagId],
+      };
+    }
+    case "selectCollection":
+      return { ...state, selectedCollectionId: action.collectionId };
     default:
       return state;
   }
@@ -348,4 +391,13 @@ export function selectSelectedJob(state: SonicState) {
 
 export function selectSelectedLibraryItem(state: SonicState) {
   return state.library.find((item) => item.id === state.selectedLibraryId) ?? null;
+}
+
+// v0.3 selectors
+export function selectSelectedTags(state: SonicState) {
+  return state.tags.filter((tag) => state.selectedTagIds.includes(tag.id));
+}
+
+export function selectSelectedCollection(state: SonicState) {
+  return state.collections.find((c) => c.id === state.selectedCollectionId) ?? null;
 }

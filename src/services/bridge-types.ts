@@ -1,7 +1,9 @@
 import type {
   BootstrapPayload,
   BridgeMode,
+  Collection,
   Diagnostics,
+  DuplicateGroup,
   ExportPreset,
   ExportRequest,
   FilenamePreviewRequest,
@@ -9,13 +11,16 @@ import type {
   LibraryFilters,
   LibraryItem,
   LibraryPage,
+  LibraryRoot,
   LibrarySort,
   PreviewAsset,
   QueueItem,
   QueueSnapshot,
+  SidecarImportReport,
   SonicSettings,
   SourceInput,
   SourceInspection,
+  Tag,
 } from "../domain/types";
 
 export type Unsubscribe = () => void;
@@ -53,4 +58,39 @@ export interface SonicBridge {
   openSource(source: SourceInput): Promise<void>;
   prepareEngine(): Promise<void>;
   refreshDependencies(): Promise<Diagnostics>;
+  
+  // Library roots (v0.3)
+  listLibraryRoots(): Promise<LibraryRoot[]>;
+  createLibraryRoot(name: string, path: string): Promise<LibraryRoot>;
+  updateLibraryRoot(id: number, patch: { name?: string; path?: string; enabled?: boolean }): Promise<LibraryRoot>;
+  deleteLibraryRoot(id: number): Promise<void>;
+  relinkLibraryRoot(oldRootId: number, newRootId: number): Promise<number>;
+  
+  // Tags (v0.3)
+  listTags(): Promise<Tag[]>;
+  createTag(name: string, color?: string): Promise<Tag>;
+  updateTag(id: number, patch: { name?: string; color?: string }): Promise<Tag>;
+  deleteTag(id: number): Promise<void>;
+  assignTagToItem(itemId: string, tagId: number): Promise<void>;
+  removeTagFromItem(itemId: string, tagId: number): Promise<void>;
+  
+  // Collections (v0.3)
+  listCollections(): Promise<Collection[]>;
+  createCollection(name: string, description?: string): Promise<Collection>;
+  updateCollection(id: number, patch: { name?: string; description?: string }): Promise<Collection>;
+  deleteCollection(id: number): Promise<void>;
+  addItemsToCollection(collectionId: number, itemIds: string[]): Promise<void>;
+  removeItemsFromCollection(collectionId: number, itemIds: string[]): Promise<void>;
+  
+  // Bulk actions (v0.3)
+  bulkTagItems(itemIds: string[], tagId: number): Promise<void>;
+  bulkUpdateItems(itemIds: string[], patch: Partial<LibraryItem>): Promise<void>;
+  bulkDeleteItems(itemIds: string[], deleteFiles: boolean): Promise<void>;
+  
+  // Duplicate detection (v0.3)
+  findDuplicatesBySha256(): Promise<DuplicateGroup[]>;
+  findDuplicatesBySource(): Promise<DuplicateGroup[]>;
+  
+  // Sidecar import (v0.3)
+  scanSidecarFolder(folderPath: string, recursive: boolean): Promise<SidecarImportReport>;
 }
