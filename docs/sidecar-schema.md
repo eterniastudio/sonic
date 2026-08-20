@@ -1,8 +1,11 @@
 # Sonic metadata sidecar
 
-Every Sonic v0.2 export is paired with `<audio-stem>.sonic.json`. The sidecar
-is the portable producer record; SQLite Library history is an optional local
-index and is not required to understand the file.
+Every Sonic export is paired with `.json/<audio-filename>.sonic.json` inside
+the selected output directory. For example, `Track.wav` is paired with
+`.json/Track.wav.sonic.json`. The sidecar is the portable producer record;
+SQLite Library history is an optional local index and is not required to
+understand the file. Sonic continues to read and import older sidecars stored
+beside their audio.
 
 ## Schema version 1
 

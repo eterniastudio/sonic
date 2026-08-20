@@ -1018,6 +1018,15 @@ fn library_item_from_sidecar(
     })
 }
 
+fn canonical_recovery_sidecar(path: &Path, output: &Path) -> Option<PathBuf> {
+    let canonical = canonical_recorded_file(path).ok().flatten()?;
+    let parent = canonical.parent()?;
+    let is_legacy = parent == output;
+    let is_nested = parent.file_name().and_then(|name| name.to_str()) == Some(".json")
+        && parent.parent() == Some(output);
+    (is_legacy || is_nested).then_some(canonical)
+}
+
 fn recover_interrupted_jobs(repository: &Repository) -> AppResult<RecoveryReport> {
     let mut report = RecoveryReport::default();
     for detail in repository.running_jobs_for_recovery()? {
@@ -1033,10 +1042,7 @@ fn recover_interrupted_jobs(repository: &Repository) -> AppResult<RecoveryReport
                     .then(|| canonical_recorded_file(&audio).ok().flatten())
                     .flatten()
                     .filter(|path| path.parent() == Some(output.as_path()));
-                let safe_sidecar = (sidecar_path.parent() == Some(output.as_path()))
-                    .then(|| canonical_recorded_file(&sidecar_path).ok().flatten())
-                    .flatten()
-                    .filter(|path| path.parent() == Some(output.as_path()));
+                let safe_sidecar = canonical_recovery_sidecar(&sidecar_path, output);
                 let hashes_match = safe_audio.as_ref().is_some_and(|path| {
                     sha256_file(path).ok().as_deref() == Some(&journal.audio_sha256)
                 }) && safe_sidecar.as_ref().is_some_and(|path| {
@@ -1260,5 +1266,27 @@ mod tests {
         manager.begin_dispatch_pass();
         assert!(!manager.finish_dispatch_pass());
         assert!(!manager.dispatching.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn recovery_accepts_nested_and_legacy_sidecars_only() {
+        let root = std::env::temp_dir().join(format!("sonic-recovery-path-{}", Uuid::new_v4()));
+        fs::create_dir_all(root.join(".json")).unwrap();
+        fs::write(root.join("legacy.sonic.json"), b"{}").unwrap();
+        fs::write(root.join(".json").join("nested.wav.sonic.json"), b"{}").unwrap();
+        let outside = root.parent().unwrap().join("outside.sonic.json");
+        fs::write(&outside, b"{}").unwrap();
+        let output = root.canonicalize().unwrap();
+
+        assert!(canonical_recovery_sidecar(&output.join("legacy.sonic.json"), &output).is_some());
+        assert!(canonical_recovery_sidecar(
+            &output.join(".json").join("nested.wav.sonic.json"),
+            &output
+        )
+        .is_some());
+        assert!(canonical_recovery_sidecar(&outside, &output).is_none());
+
+        fs::remove_file(outside).unwrap();
+        fs::remove_dir_all(root).unwrap();
     }
 }

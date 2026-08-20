@@ -186,7 +186,9 @@ silently replaced.
 Every processed export receives a versioned `.sonic.json` sidecar with source
 identity and fingerprint, final metadata, evidence and warnings, output audio
 properties, export recipe, tag readback status, output SHA-256, and Sonic
-schema/version identifiers. Full local source paths are excluded by default.
+schema/version identifiers. Sonic creates a `.json` folder inside the selected
+output directory and stores sidecars there as `<audio-filename>.sonic.json`,
+leaving the main folder uncluttered. Full local source paths are excluded by default.
 See the [sidecar v1 reference](docs/sidecar-schema.md).
 
 ### Beat Library and preview transport
