@@ -80,5 +80,25 @@ describe("Rust to TypeScript v0.2 contracts", () => {
       kind: "youtube",
       url: "https://youtu.be/fixture",
     });
+    expect(normalizeSource({ kind: "soundcloud", url: "https://soundcloud.com/artist/fixture" })).toEqual({
+      kind: "soundcloud",
+      url: "https://soundcloud.com/artist/fixture",
+    });
+  });
+
+  it("preserves valid tempo analysis and rejects invalid confidence", () => {
+    const analysis = {
+      sourceSha256: "a".repeat(64),
+      analyzerVersion: "sonic-tempo-1",
+      analyzedDurationMs: 30_000,
+      bpm: { primary: 128, alternates: [64, 256], confidence: 0.91 },
+      warnings: [],
+    };
+    expect(normalizeInspection({ ...inspectionFixture, audioAnalysis: analysis }).audioAnalysis)
+      .toEqual(analysis);
+    expect(normalizeInspection({
+      ...inspectionFixture,
+      audioAnalysis: { ...analysis, bpm: { ...analysis.bpm, confidence: Number.POSITIVE_INFINITY } },
+    }).audioAnalysis).toBeUndefined();
   });
 });

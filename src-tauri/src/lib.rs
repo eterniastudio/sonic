@@ -1,13 +1,16 @@
 mod acquisition;
+mod audio_analysis;
 mod commands;
 mod error;
 mod filesystem;
 mod jobs;
+mod media_retry;
 mod metadata;
 mod models;
 mod presets;
 mod preview;
 mod sidecar;
+mod stem_separator;
 mod storage;
 mod tools;
 
@@ -60,6 +63,9 @@ pub fn run() {
             commands::check_dependencies,
             commands::get_default_output_dir,
             commands::prepare_media_engine,
+            commands::stem_engine_status,
+            commands::prepare_stem_engine,
+            commands::separate_library_item_stems,
             commands::inspect_video,
             commands::start_download,
             commands::cancel_download,

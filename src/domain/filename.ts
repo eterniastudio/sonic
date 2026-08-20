@@ -42,7 +42,7 @@ export function renderFilename(request: FilenamePreviewRequest, extension: strin
     camelot: metadata.camelot !== undefined ? metadata.camelot : source.metadata.camelot ?? "",
     detune,
     preset: presetId,
-    source: source.kind === "youtube" ? "YouTube" : "Local",
+    source: source.kind === "youtube" ? "YouTube" : source.kind === "soundcloud" ? "SoundCloud" : "Local",
     date: new Date().toISOString().slice(0, 10),
   };
   const rendered = template.replace(/\{([a-zA-Z]+)\}/g, (_, key: string) => values[key] ?? "");

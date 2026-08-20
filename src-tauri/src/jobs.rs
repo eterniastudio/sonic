@@ -13,19 +13,23 @@ use tauri_plugin_shell::process::{Command as ShellCommand, CommandChild, Command
 use uuid::Uuid;
 
 use crate::{
-    acquisition::{probe_audio, validate_youtube_url},
+    acquisition::{probe_audio, validate_soundcloud_url, validate_youtube_url},
+    audio_analysis::{analyze_audio, AudioAnalysis, ANALYZER_VERSION},
     error::{invalid, AppError, AppResult},
     filesystem::{
         canonical_local_audio, canonical_output_directory, canonical_recorded_file,
         external_path_string, prepare_workspace, preset_extension, publish_pair,
         read_publication_journal, render_filename, safe_cleanup_workspace,
     },
+    media_retry::{format_exhausted_error, run_with_retry, sleep, RetryPolicy},
     models::{
         AppSettings, DownloadProgress, EnqueueItem, ExportPresetId, JobProgress, JobState,
         LibraryItem, QueueJob, RecoveryReport, SettingsPatch, SourceSpec, JOB_UPDATED_EVENT,
         LEGACY_PROGRESS_EVENT, QUEUE_UPDATED_EVENT,
     },
-    presets::{ffmpeg_transcode_args, validate_export, validate_metadata},
+    presets::{
+        ffmpeg_transcode_args, validate_export, validate_metadata, validate_output_contract,
+    },
     sidecar::{build_sidecar, read_sidecar, write_sidecar, SidecarBuild, SonicSidecar, TagStatus},
     storage::{now_ms, Repository},
     tools::{
@@ -175,7 +179,7 @@ impl AppState {
         job_id: &str,
         active: &Arc<ActiveJob>,
     ) -> AppResult<()> {
-        let detail = self.repository.job_detail(job_id)?;
+        let mut detail = self.repository.job_detail(job_id)?;
         validate_enqueue_item(&detail.request)?;
         let settings = self.repository.get_settings()?.settings;
         let output_directory = canonical_output_directory(&detail.request.output_directory)?;
@@ -208,12 +212,34 @@ impl AppState {
                     "Acquiring source audio",
                     None,
                 )?;
-                acquire_youtube(
+                let url = validate_youtube_url(url)?;
+                acquire_remote(
                     app,
                     &self.repository,
                     job_id,
                     active,
-                    url,
+                    &url,
+                    &workspace,
+                    &settings,
+                )
+                .await?
+            }
+            SourceSpec::Soundcloud { url } => {
+                transition(
+                    app,
+                    &self.repository,
+                    job_id,
+                    JobState::Acquiring,
+                    "Acquiring SoundCloud audio",
+                    None,
+                )?;
+                let url = validate_soundcloud_url(url)?;
+                acquire_remote(
+                    app,
+                    &self.repository,
+                    job_id,
+                    active,
+                    &url,
                     &workspace,
                     &settings,
                 )
@@ -262,6 +288,58 @@ impl AppState {
             ));
         }
 
+        let progress = JobProgress {
+            message: Some("Analyzing tempo from the audio signal".into()),
+            ..Default::default()
+        };
+        if let Ok(job) = self.repository.update_progress(job_id, &progress) {
+            emit_job(app, &self.repository, &job);
+        }
+        let source_hash = sha256_file(&staged_input)?;
+        let analysis = if let Some(existing) = detail
+            .request
+            .inspection
+            .audio_analysis
+            .clone()
+            .filter(|value| value.source_sha256 == source_hash)
+        {
+            existing
+        } else {
+            let app_for_analysis = app.clone();
+            let input_for_analysis = staged_input.clone();
+            let hash_for_analysis = source_hash.clone();
+            match tauri::async_runtime::spawn_blocking(move || {
+                analyze_audio(&app_for_analysis, &input_for_analysis, hash_for_analysis)
+            })
+            .await
+            {
+                Ok(Ok(value)) => value,
+                Ok(Err(error)) => AudioAnalysis {
+                    source_sha256: source_hash.clone(),
+                    analyzer_version: ANALYZER_VERSION.into(),
+                    analyzed_duration_ms: 0,
+                    bpm: None,
+                    key: None,
+                    warnings: vec![format!(
+                        "Audio analysis was skipped: {}",
+                        error.public_message()
+                    )],
+                },
+                Err(error) => AudioAnalysis {
+                    source_sha256: source_hash.clone(),
+                    analyzer_version: ANALYZER_VERSION.into(),
+                    analyzed_duration_ms: 0,
+                    bpm: None,
+                    key: None,
+                    warnings: vec![format!("Tempo analysis task could not finish: {error}")],
+                },
+            }
+        };
+        let current_revision = self.repository.job_detail(job_id)?.summary.revision;
+        detail = self
+            .repository
+            .apply_audio_analysis(job_id, current_revision, &analysis)?;
+
         let staged_audio = if detail.request.export.preset_id == ExportPresetId::Original {
             staged_input
         } else {
@@ -307,6 +385,7 @@ impl AppState {
             None,
         )?;
         let output_probe = probe_audio(app, &staged_audio)?;
+        validate_output_contract(detail.request.export.preset_id, &output_probe.audio)?;
         let output_hash = sha256_file(&staged_audio)?;
         let tag_status = verify_tag_readback(&detail.request, &output_probe.tags);
         let library_item_id = Uuid::new_v4().to_string();
@@ -359,6 +438,8 @@ impl AppState {
         )?;
         if settings.history_enabled {
             self.repository.insert_library_item(&library)?;
+            self.repository
+                .insert_audio_analysis(&library_item_id, &analysis)?;
         }
         let completed =
             self.repository
@@ -480,7 +561,7 @@ struct ProcessOutput {
     reported_output: Option<String>,
 }
 
-async fn acquire_youtube(
+async fn acquire_remote(
     app: &AppHandle,
     repository: &Repository,
     job_id: &str,
@@ -489,7 +570,7 @@ async fn acquire_youtube(
     workspace: &Path,
     settings: &AppSettings,
 ) -> AppResult<PathBuf> {
-    let url = validate_youtube_url(input)?;
+    let url = input.to_string();
     let js_runtime = bundled_js_runtime(app)?;
     let ffmpeg_directory = ffmpeg_directory(app)?;
     let args = vec![
@@ -534,16 +615,51 @@ async fn acquire_youtube(
         "--".to_string(),
         url,
     ];
-    let result = run_process(
-        app,
-        repository,
-        job_id,
-        active,
-        yt_dlp_command(app)?,
-        args,
-        ProcessKind::YtDlp,
+    let policy = RetryPolicy::default();
+    let result = run_with_retry(
+        policy,
+        |attempt| {
+            let args = args.clone();
+            async move {
+                ensure_not_cancelled(active)?;
+                if attempt > 1 {
+                    let progress = JobProgress {
+                        message: Some(format!(
+                            "Retrying source audio (attempt {attempt} of {})",
+                            policy.max_attempts
+                        )),
+                        ..Default::default()
+                    };
+                    if let Ok(job) = repository.update_progress(job_id, &progress) {
+                        emit_job(app, repository, &job);
+                    }
+                }
+                run_process(
+                    app,
+                    repository,
+                    job_id,
+                    active,
+                    yt_dlp_command(app)?,
+                    args,
+                    ProcessKind::YtDlp,
+                )
+                .await
+            }
+        },
+        sleep,
     )
-    .await?;
+    .await
+    .map_err(|failure| {
+        if failure.attempts == policy.max_attempts {
+            AppError::Process(format_exhausted_error(
+                "source acquisition",
+                failure.attempts,
+                &failure.error.public_message(),
+            ))
+        } else {
+            failure.error
+        }
+    })?;
     if let Some(path) = result.reported_output {
         if let Some(path) = validated_workspace_file(Path::new(&path), workspace) {
             return Ok(path);
@@ -835,7 +951,7 @@ fn source_extension(request: &EnqueueItem) -> Option<String> {
             .extension()
             .and_then(|value| value.to_str())
             .map(str::to_ascii_lowercase),
-        SourceSpec::Youtube { .. } => request
+        SourceSpec::Youtube { .. } | SourceSpec::Soundcloud { .. } => request
             .inspection
             .audio
             .container
@@ -934,6 +1050,9 @@ fn library_item_from_sidecar(
             "youtube" => SourceSpec::Youtube {
                 url: sidecar.source.canonical_url.clone().unwrap_or_default(),
             },
+            "soundcloud" => SourceSpec::Soundcloud {
+                url: sidecar.source.canonical_url.clone().unwrap_or_default(),
+            },
             "localFile" => SourceSpec::LocalFile {
                 path: sidecar
                     .source
@@ -979,6 +1098,15 @@ fn library_item_from_sidecar(
     })
 }
 
+fn canonical_recovery_sidecar(path: &Path, output: &Path) -> Option<PathBuf> {
+    let canonical = canonical_recorded_file(path).ok().flatten()?;
+    let parent = canonical.parent()?;
+    let is_legacy = parent == output;
+    let is_nested = parent.file_name().and_then(|name| name.to_str()) == Some(".json")
+        && parent.parent() == Some(output);
+    (is_legacy || is_nested).then_some(canonical)
+}
+
 fn recover_interrupted_jobs(repository: &Repository) -> AppResult<RecoveryReport> {
     let mut report = RecoveryReport::default();
     for detail in repository.running_jobs_for_recovery()? {
@@ -994,10 +1122,7 @@ fn recover_interrupted_jobs(repository: &Repository) -> AppResult<RecoveryReport
                     .then(|| canonical_recorded_file(&audio).ok().flatten())
                     .flatten()
                     .filter(|path| path.parent() == Some(output.as_path()));
-                let safe_sidecar = (sidecar_path.parent() == Some(output.as_path()))
-                    .then(|| canonical_recorded_file(&sidecar_path).ok().flatten())
-                    .flatten()
-                    .filter(|path| path.parent() == Some(output.as_path()));
+                let safe_sidecar = canonical_recovery_sidecar(&sidecar_path, output);
                 let hashes_match = safe_audio.as_ref().is_some_and(|path| {
                     sha256_file(path).ok().as_deref() == Some(&journal.audio_sha256)
                 }) && safe_sidecar.as_ref().is_some_and(|path| {
@@ -1145,6 +1270,7 @@ mod tests {
                 declared_metadata: MusicMetadata::default(),
                 embedded_metadata: MusicMetadata::default(),
                 suggested_metadata: MusicMetadata::default(),
+                audio_analysis: None,
                 warnings: vec![],
             },
             metadata: FinalMetadata {
@@ -1221,5 +1347,27 @@ mod tests {
         manager.begin_dispatch_pass();
         assert!(!manager.finish_dispatch_pass());
         assert!(!manager.dispatching.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn recovery_accepts_nested_and_legacy_sidecars_only() {
+        let root = std::env::temp_dir().join(format!("sonic-recovery-path-{}", Uuid::new_v4()));
+        fs::create_dir_all(root.join(".json")).unwrap();
+        fs::write(root.join("legacy.sonic.json"), b"{}").unwrap();
+        fs::write(root.join(".json").join("nested.wav.sonic.json"), b"{}").unwrap();
+        let outside = root.parent().unwrap().join("outside.sonic.json");
+        fs::write(&outside, b"{}").unwrap();
+        let output = root.canonicalize().unwrap();
+
+        assert!(canonical_recovery_sidecar(&output.join("legacy.sonic.json"), &output).is_some());
+        assert!(canonical_recovery_sidecar(
+            &output.join(".json").join("nested.wav.sonic.json"),
+            &output
+        )
+        .is_some());
+        assert!(canonical_recovery_sidecar(&outside, &output).is_none());
+
+        fs::remove_file(outside).unwrap();
+        fs::remove_dir_all(root).unwrap();
     }
 }

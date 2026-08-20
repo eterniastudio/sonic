@@ -1,12 +1,12 @@
 # ADR 0003: Audio Analysis Boundary
 
 **Date:** 2026-01-01  
-**Status:** Proposed  
-**Context:** Sonic v0.4.0 — Audio Intelligence
+**Status:** Accepted and partially implemented
+**Context:** Sonic local audio intelligence
 
 ## Problem Statement
 
-Sonic v0.2 explicitly states: "it currently parses declared text and embedded tags; it does not derive BPM, key, or tuning from the waveform."
+Sonic originally parsed declared text and embedded tags without deriving musical values from the waveform. The implemented analyzer now estimates BPM and key locally; tuning and loudness remain future work.
 
 Producers need audio-derived analysis (BPM, key, loudness) for:
 - Verifying declared metadata accuracy
@@ -22,7 +22,7 @@ However, blindly overwriting user-provided metadata with algorithmic guesses wou
 
 ## Decision
 
-Implement a **layered evidence model** where audio analysis exists as a separate evidence category that never silently overwrites final user values.
+Implement a **layered evidence model** where audio analysis remains a separate evidence category. At the producer's explicit product direction, a high-confidence BPM or key estimate may fill a blank final field automatically. It never replaces a declared, embedded, or manually edited value.
 
 ### Evidence Categories
 

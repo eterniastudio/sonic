@@ -2,6 +2,7 @@ export type AppRoute = "session" | "library" | "settings";
 
 export type SourceInput =
   | { kind: "youtube"; url: string }
+  | { kind: "soundcloud"; url: string }
   | { kind: "localFile"; path: string };
 
 export type SourceKind = SourceInput["kind"];
@@ -37,6 +38,27 @@ export type MusicMetadata = {
   warnings: string[];
 };
 
+export type TempoEstimate = {
+  primary: number;
+  alternates: number[];
+  confidence: number;
+};
+
+export type AudioAnalysis = {
+  sourceSha256: string;
+  analyzerVersion: string;
+  analyzedDurationMs: number;
+  bpm?: TempoEstimate;
+  key?: { primary: string; camelot: string; confidence: number };
+  warnings: string[];
+};
+
+export type StemEngineStatus = {
+  installed: boolean;
+  model: string;
+  description: string;
+};
+
 export type SourceInspection = {
   id: string;
   source: SourceInput;
@@ -56,8 +78,9 @@ export type SourceInspection = {
   audio: AudioProperties;
   declaredMetadata: MusicMetadata;
   embeddedMetadata: MusicMetadata;
-  /** Derived only from declared text and embedded tags; never from the audio signal. */
+  /** Evidence-ranked metadata; qualified tempo analysis may fill a missing BPM. */
   suggestedMetadata: MusicMetadata;
+  audioAnalysis?: AudioAnalysis;
   warnings: string[];
   /** Convenience alias for suggestedMetadata used by presentation selectors. */
   metadata: MusicMetadata;
@@ -335,35 +358,37 @@ export type LibraryPage = {
 };
 
 export type LibraryRoot = {
-  id: number;
-  name: string;
-  path: string;
-  enabled: boolean;
-  itemCount: number;
-  createdAt: string;
-  updatedAt: string;
+  id: string;
+  label: string;
+  rootPath: string;
+  createdAtMs: number;
+  updatedAtMs: number;
 };
 
 export type Tag = {
-  id: number;
+  id: string;
   name: string;
   color?: string;
   itemCount: number;
+  createdAtMs: number;
 };
 
 export type Collection = {
-  id: number;
+  id: string;
   name: string;
   description?: string;
+  isSmart: boolean;
+  queryJson?: string;
   itemCount: number;
-  createdAt: string;
-  updatedAt: string;
+  createdAtMs: number;
+  updatedAtMs: number;
 };
 
 export type DuplicateGroup = {
   fingerprint: string;
-  fingerprintType: "sha256" | "source";
-  items: LibraryItem[];
+  groupType: "exact_sha256" | "same_source";
+  itemIds: string[];
+  count: number;
 };
 
 export type SidecarImportReport = {
@@ -371,6 +396,5 @@ export type SidecarImportReport = {
   importedCount: number;
   skippedCount: number;
   errorCount: number;
-  errors: Array<{ path: string; error: string }>;
-  imported: LibraryItem[];
+  errors: Array<{ path: string; error: string; errorCode: string }>;
 };

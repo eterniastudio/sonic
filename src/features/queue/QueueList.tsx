@@ -1,6 +1,4 @@
 import {
-  ArrowDown,
-  ArrowUp,
   Check,
   CircleNotch,
   FileAudio,
@@ -66,12 +64,12 @@ export function QueueList() {
       {state.queuePaused ? (
         <div className="queue-paused" role="status">
           <Pause size={15} weight="fill" aria-hidden="true" />
-          Paused. The current export will keep running.
+          Paused. Active exports will finish.
         </div>
       ) : null}
 
       {jobs.length ? (
-        <div className="queue-list" role="list" aria-label="Current session sources">
+        <div className="queue-list" role="list" aria-label="Download queue">
           {jobs.map((item, index) => {
             const selected = selectedJob?.id === item.id;
             const active = isQueueItemActive(item);
@@ -108,7 +106,7 @@ export function QueueList() {
                   <span className="queue-main">
                     <span className="queue-title">{item.inspection?.title ?? (item.source.kind === "localFile" ? item.source.path.split(/[\\/]/).pop() : "Reading link")}</span>
                     <span className="queue-subtitle">
-                      {item.inspection?.creator ?? item.inspection?.sourceLabel ?? (item.source.kind === "youtube" ? "YouTube" : "Local file")}
+                      {item.inspection?.creator ?? item.inspection?.sourceLabel ?? (item.source.kind === "youtube" ? "YouTube" : item.source.kind === "soundcloud" ? "SoundCloud" : "Local file")}
                     </span>
                   </span>
                   <span className="queue-metadata" aria-label="Musical metadata">
@@ -139,10 +137,10 @@ export function QueueList() {
                   </span>
                   <div className="row-actions">
                     <button type="button" disabled={index === 0 || !reorderable} onClick={() => void moveItem(item.id, -1)} aria-label={`Move ${item.inspection?.title ?? "item"} up`}>
-                      <ArrowUp size={14} aria-hidden="true" />
+                      <span aria-hidden="true">↑</span>
                     </button>
                     <button type="button" disabled={index === jobs.length - 1 || !reorderable} onClick={() => void moveItem(item.id, 1)} aria-label={`Move ${item.inspection?.title ?? "item"} down`}>
-                      <ArrowDown size={14} aria-hidden="true" />
+                      <span aria-hidden="true">↓</span>
                     </button>
                     {cancellable ? (
                       <button type="button" onClick={() => void cancelItem(item.id)} aria-label={`Cancel ${item.inspection?.title ?? "export"}`}><Stop size={14} weight="fill" aria-hidden="true" /></button>
@@ -163,8 +161,8 @@ export function QueueList() {
       ) : (
         <div className="queue-empty">
           <FileAudio size={31} aria-hidden="true" />
-          <h3>Nothing here yet</h3>
-          <p>Paste a link or choose an audio file to get started.</p>
+          <h3>No tracks yet</h3>
+          <p>Paste a link or choose an audio file.</p>
         </div>
       )}
 
@@ -175,7 +173,7 @@ export function QueueList() {
       ) : null}
       {retainedCompletedCount ? (
         <p className="retained-history-note">
-          {retainedCompletedCount} finished {retainedCompletedCount === 1 ? "track is" : "tracks are"} still linked to the Library.
+          {retainedCompletedCount} finished {retainedCompletedCount === 1 ? "track stays" : "tracks stay"} in Library.
         </p>
       ) : null}
     </section>

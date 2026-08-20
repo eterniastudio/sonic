@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Sonic - Producer Workstation",
+        "title": "Sonic - Audio Downloader and Stem Splitter",
         "width": 1440,
         "height": 900,
         "minWidth": 960,
@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data: https://i.ytimg.com https://*.ytimg.com https://yt3.ggpht.com; media-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; font-src 'self' data:",
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data: https://i.ytimg.com https://*.ytimg.com https://yt3.ggpht.com https://*.sndcdn.com; media-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; font-src 'self' data:",
       "assetProtocol": {
         "enable": true,
         "scope": ["$APPCACHE/previews/**"]
@@ -47,6 +47,7 @@
       "../artifacts/licenses/": "licenses/generated/",
       "../scripts/tool-manifest.json": "tool-manifest.json",
       "../scripts/install-media-engine.ps1": "install-media-engine.ps1",
+      "../scripts/install-stem-engine.ps1": "install-stem-engine.ps1",
       "binaries/python-runtime/*.dll": "",
       "binaries/python-runtime/*.pyd": "",
       "binaries/python-runtime/*.zip": "",
@@ -55,8 +56,8 @@
       "binaries/python-runtime/yt-dlp": "yt-dlp",
       "binaries/versions.json": "versions.json"
     },
-    "shortDescription": "A local-first producer intake and export workstation.",
-    "longDescription": "Sonic organizes authorized media and local audio into a producer-ready queue with declared-metadata review, producer-verified BPM, musical key and tuning values, export recipes, and a searchable local library.",
+    "shortDescription": "Download, analyze, export, and split audio.",
+    "longDescription": "Download authorized audio from YouTube or SoundCloud, add local files, detect BPM and key, export common audio formats, split four stems, and find finished tracks in your Library.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

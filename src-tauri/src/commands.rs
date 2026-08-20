@@ -25,6 +25,7 @@ use crate::{
     },
     presets::{export_presets, validate_metadata},
     sidecar::read_sidecar,
+    stem_separator::{self, StemEngineStatus},
     storage::{now_ms, DB_SCHEMA_VERSION},
     tools,
 };
@@ -51,6 +52,32 @@ pub async fn inspect_source(
 ) -> AppResult<SourceInspection> {
     let settings = state.repository.get_settings()?.settings;
     acquisition::inspect_source(&app, request.source, &settings).await
+}
+
+#[tauri::command]
+pub fn stem_engine_status(app: AppHandle) -> StemEngineStatus {
+    stem_separator::status(&app)
+}
+
+#[tauri::command]
+pub async fn prepare_stem_engine(app: AppHandle) -> AppResult<String> {
+    tauri::async_runtime::spawn_blocking(move || stem_separator::prepare(&app))
+        .await
+        .map_err(|error| AppError::Internal(format!("Stem-engine setup task failed: {error}")))?
+}
+
+#[tauri::command]
+pub async fn separate_library_item_stems(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    item_id: String,
+) -> AppResult<Vec<String>> {
+    let item = state.repository.library_item(&item_id)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        stem_separator::separate(&app, Path::new(&item.audio_path))
+    })
+    .await
+    .map_err(|error| AppError::Internal(format!("Stem-separation task failed: {error}")))?
 }
 
 #[tauri::command]
@@ -661,9 +688,11 @@ pub fn update_library_root(
     state: State<'_, AppState>,
     request: UpdateLibraryRootRequest,
 ) -> AppResult<()> {
-    state
-        .repository
-        .update_library_root(&request.id, request.label.as_deref(), request.root_path.as_deref())
+    state.repository.update_library_root(
+        &request.id,
+        request.label.as_deref(),
+        request.root_path.as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -794,10 +823,7 @@ pub fn remove_items_from_collection(
 }
 
 #[tauri::command]
-pub fn bulk_tag_items(
-    state: State<'_, AppState>,
-    request: BulkTagRequest,
-) -> AppResult<usize> {
+pub fn bulk_tag_items(state: State<'_, AppState>, request: BulkTagRequest) -> AppResult<usize> {
     let item_ids: Vec<&str> = request.item_ids.iter().map(|s| s.as_str()).collect();
     let tag_ids: Vec<&str> = request.tag_ids.iter().map(|s| s.as_str()).collect();
     state.repository.bulk_tag_items(&item_ids, &tag_ids)
@@ -822,9 +848,7 @@ pub fn bulk_delete_items(
 }
 
 #[tauri::command]
-pub fn find_duplicates_by_sha256(
-    state: State<'_, AppState>,
-) -> AppResult<Vec<DuplicateGroup>> {
+pub fn find_duplicates_by_sha256(state: State<'_, AppState>) -> AppResult<Vec<DuplicateGroup>> {
     state.repository.find_duplicates_by_sha256()
 }
 
@@ -841,5 +865,7 @@ pub fn scan_sidecar_folder(
     folder_path: String,
     recursive: bool,
 ) -> AppResult<SidecarImportReport> {
-    state.repository.scan_sidecar_folder(&folder_path, recursive)
+    state
+        .repository
+        .scan_sidecar_folder(&folder_path, recursive)
 }

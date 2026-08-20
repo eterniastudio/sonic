@@ -7,6 +7,31 @@ describe("browser preview queue contract", () => {
     localStorage.clear();
   });
 
+  it("supports library-intelligence CRUD in the deterministic preview", async () => {
+    const bridge = new BrowserPreviewBridge();
+
+    const rootId = await bridge.createLibraryRoot("Main crate", "C:\\Beats");
+    const tagId = await bridge.createTag("Dark", "#442244");
+    const collectionId = await bridge.createCollection("For placements", "Shortlist");
+
+    await expect(bridge.listLibraryRoots()).resolves.toContainEqual(expect.objectContaining({
+      id: rootId,
+      label: "Main crate",
+      rootPath: "C:\\Beats",
+    }));
+    await expect(bridge.listTags()).resolves.toContainEqual(expect.objectContaining({
+      id: tagId,
+      name: "Dark",
+      itemCount: 0,
+    }));
+    await expect(bridge.listCollections()).resolves.toContainEqual(expect.objectContaining({
+      id: collectionId,
+      name: "For placements",
+      description: "Shortlist",
+      itemCount: 0,
+    }));
+  });
+
   it("pauses without starting work, reorders by the complete requested ID list, and persists both", async () => {
     const bridge = new BrowserPreviewBridge();
     const updates: string[][] = [];

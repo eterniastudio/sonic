@@ -11,59 +11,18 @@ use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
 use crate::{
-    error::{conflict, not_found, AppError, AppResult},
+    audio_analysis::{apply_to_final_metadata, apply_to_music_metadata, AudioAnalysis},
+    error::{conflict, invalid, not_found, AppError, AppResult},
     filesystem::external_path_string,
     models::{
-        AppSettings, Collection, EnqueueItem, FacetCount, JobDetail, JobPage, JobProgress, JobQuery, JobState,
-        LibraryFacets, LibraryItem, LibraryItemLocation, LibraryPage, LibraryQuery, LibraryRoot, QueueJob,
-        QueueSnapshot, SettingsPatch, SettingsSnapshot, Tag,
+        AppSettings, Collection, EnqueueItem, FacetCount, JobDetail, JobPage, JobProgress,
+        JobQuery, JobState, LibraryFacets, LibraryItem, LibraryPage, LibraryQuery, LibraryRoot,
+        LibrarySort, QueueJob, QueueSnapshot, SettingsPatch, SettingsSnapshot, SourceSpec, Tag,
     },
 };
 
 pub const DB_SCHEMA_VERSION: u32 = 3;
 const APPLICATION_ID: i64 = 0x534F_4E49; // "SONI"
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LibraryRoot {
-    pub id: String,
-    pub label: String,
-    pub root_path: String,
-    pub created_at_ms: i64,
-    pub updated_at_ms: i64,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LibraryItemLocation {
-    pub id: String,
-    pub item_id: String,
-    pub root_id: String,
-    pub relative_audio_path: String,
-    pub relative_sidecar_path: String,
-    pub created_at_ms: i64,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Tag {
-    pub id: String,
-    pub name: String,
-    pub color: Option<String>,
-    pub created_at_ms: i64,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Collection {
-    pub id: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub is_smart: bool,
-    pub query_json: Option<String>,
-    pub created_at_ms: i64,
-    pub updated_at_ms: i64,
-}
 
 #[derive(Clone)]
 pub struct Repository {
@@ -102,7 +61,9 @@ impl Repository {
 
     fn migrate(&self) -> AppResult<()> {
         let mut connection = self.lock()?;
-        let version: u32 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        let mut version: u32 =
+            connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        let existing_database = version > 0;
         if version > DB_SCHEMA_VERSION {
             return Err(AppError::Database(rusqlite::Error::InvalidQuery));
         }
@@ -209,8 +170,9 @@ impl Repository {
                 [now],
             )?;
             transaction.pragma_update(None, "application_id", APPLICATION_ID)?;
-            transaction.pragma_update(None, "user_version", DB_SCHEMA_VERSION)?;
+            transaction.pragma_update(None, "user_version", 1)?;
             transaction.commit()?;
+            version = 1;
         } else {
             let application_id: i64 =
                 connection.pragma_query_value(None, "application_id", |row| row.get(0))?;
@@ -219,6 +181,34 @@ impl Repository {
                     "The local database does not belong to Sonic".into(),
                 ));
             }
+        }
+
+        if existing_database && version < DB_SCHEMA_VERSION {
+            self.backup_database(&connection)?;
+        }
+        if version < 2 {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            transaction.execute_batch(include_str!("migrations/v1_to_v2_columns.sql"))?;
+            transaction.execute_batch(include_str!("migrations/v1_to_v2.sql"))?;
+            transaction.execute(
+                "INSERT INTO schema_migrations(version, applied_at_ms) VALUES(2, ?1)",
+                [now_ms()],
+            )?;
+            transaction.pragma_update(None, "user_version", 2)?;
+            transaction.commit()?;
+            version = 2;
+        }
+        if version < 3 {
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            transaction.execute_batch(include_str!("migrations/v2_to_v3.sql"))?;
+            transaction.execute(
+                "INSERT INTO schema_migrations(version, applied_at_ms) VALUES(3, ?1)",
+                [now_ms()],
+            )?;
+            transaction.pragma_update(None, "user_version", 3)?;
+            transaction.commit()?;
         }
         Ok(())
     }
@@ -738,6 +728,48 @@ impl Repository {
         self.job(id)
     }
 
+    pub fn apply_audio_analysis(
+        &self,
+        id: &str,
+        expected_revision: i64,
+        analysis: &AudioAnalysis,
+    ) -> AppResult<JobDetail> {
+        let mut connection = self.lock()?;
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let request_json: String = transaction
+            .query_row(
+                "SELECT request_json FROM jobs WHERE id=?1 AND revision=?2
+                 AND state NOT IN ('completed','failed','cancelled','interrupted')",
+                params![id, expected_revision],
+                |row| row.get(0),
+            )
+            .optional()?
+            .ok_or_else(|| conflict("The job changed before tempo analysis could be applied"))?;
+        let mut request: EnqueueItem = serde_json::from_str(&request_json)?;
+        request.inspection.audio_analysis = Some(analysis.clone());
+        apply_to_music_metadata(&mut request.inspection.suggested_metadata, analysis);
+        apply_to_final_metadata(&mut request.metadata, analysis);
+        let changed = transaction.execute(
+            "UPDATE jobs SET request_json=?1,revision=revision+1,updated_at_ms=?2
+             WHERE id=?3 AND revision=?4",
+            params![
+                serde_json::to_string(&request)?,
+                now_ms(),
+                id,
+                expected_revision
+            ],
+        )?;
+        if changed != 1 {
+            return Err(conflict(
+                "The job changed before tempo analysis could be applied",
+            ));
+        }
+        let detail =
+            transaction.query_row("SELECT * FROM jobs WHERE id=?1", [id], row_to_job_detail)?;
+        transaction.commit()?;
+        Ok(detail)
+    }
+
     pub fn running_jobs_for_recovery(&self) -> AppResult<Vec<JobDetail>> {
         let connection = self.lock()?;
         let mut statement = connection.prepare(
@@ -796,6 +828,43 @@ impl Repository {
         Ok(())
     }
 
+    pub fn insert_audio_analysis(&self, item_id: &str, analysis: &AudioAnalysis) -> AppResult<()> {
+        let tempo = analysis.bpm.as_ref();
+        let key = analysis.key.as_ref();
+        self.lock()?.execute(
+            "INSERT INTO audio_analysis(
+               id,item_id,source_sha256,analyzer_version,analyzed_at_ms,bpm_primary,
+               bpm_alternates_json,bpm_confidence,key_primary,key_camelot,key_confidence,created_at_ms
+             ) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?5)
+             ON CONFLICT(item_id) DO UPDATE SET
+               source_sha256=excluded.source_sha256,
+               analyzer_version=excluded.analyzer_version,
+               analyzed_at_ms=excluded.analyzed_at_ms,
+               bpm_primary=excluded.bpm_primary,
+               bpm_alternates_json=excluded.bpm_alternates_json,
+               bpm_confidence=excluded.bpm_confidence,
+               key_primary=excluded.key_primary,
+               key_camelot=excluded.key_camelot,
+               key_confidence=excluded.key_confidence",
+            params![
+                Uuid::new_v4().to_string(),
+                item_id,
+                analysis.source_sha256,
+                analysis.analyzer_version,
+                now_ms(),
+                tempo.map(|value| value.primary),
+                tempo
+                    .map(|value| serde_json::to_string(&value.alternates))
+                    .transpose()?,
+                tempo.map(|value| value.confidence),
+                key.map(|value| value.primary.as_str()),
+                key.map(|value| value.camelot.as_str()),
+                key.map(|value| value.confidence),
+            ],
+        )?;
+        Ok(())
+    }
+
     pub fn library_item(&self, id: &str) -> AppResult<LibraryItem> {
         let mut item = self
             .lock()?
@@ -812,154 +881,143 @@ impl Repository {
 
     pub fn list_library(&self, query: &LibraryQuery) -> AppResult<LibraryPage> {
         let connection = self.lock()?;
-        
-        // Build SQL WHERE clause from query filters
-        let mut where_clauses = Vec::new();
-        let mut params: Vec<&dyn rusqlite::ToSql> = Vec::new();
-        
+
+        let mut where_clauses = Vec::<String>::new();
+        let mut values = Vec::<rusqlite::types::Value>::new();
+
         if let Some(search) = query.search.as_deref().filter(|s| !s.trim().is_empty()) {
             let search_pattern = format!("%{}%", search.trim());
-            where_clauses.push("(title LIKE ? OR artist LIKE ? OR audio_path LIKE ? OR musical_key LIKE ? OR camelot LIKE ?)");
-            params.push(&search_pattern);
-            params.push(&search_pattern);
-            params.push(&search_pattern);
-            params.push(&search_pattern);
-            params.push(&search_pattern);
+            where_clauses.push("(title LIKE ? OR artist LIKE ? OR audio_path LIKE ? OR musical_key LIKE ? OR camelot LIKE ?)".into());
+            values.extend((0..5).map(|_| rusqlite::types::Value::Text(search_pattern.clone())));
         }
-        
+
         if let Some(key) = query.key.as_deref().filter(|k| !k.is_empty()) {
-            where_clauses.push("UPPER(musical_key) = UPPER(?)");
-            params.push(key);
+            where_clauses.push("UPPER(musical_key) = UPPER(?)".into());
+            values.push(key.to_string().into());
         }
-        
+
         if let Some(bpm_min) = query.bpm_min {
-            where_clauses.push("bpm >= ?");
-            params.push(&bpm_min);
+            where_clauses.push("bpm >= ?".into());
+            values.push(bpm_min.into());
         }
-        
+
         if let Some(bpm_max) = query.bpm_max {
-            where_clauses.push("bpm <= ?");
-            params.push(&bpm_max);
+            where_clauses.push("bpm <= ?".into());
+            values.push(bpm_max.into());
         }
-        
+
         if let Some(format) = query.format.as_deref().filter(|f| !f.is_empty()) {
-            where_clauses.push("UPPER(format) = UPPER(?)");
-            params.push(format);
+            where_clauses.push("UPPER(format) = UPPER(?)".into());
+            values.push(format.to_string().into());
         }
-        
+
         if let Some(missing) = query.missing {
-            where_clauses.push("missing = ?");
-            params.push(&(if missing { 1i64 } else { 0i64 }));
+            where_clauses.push("missing = ?".into());
+            values.push((if missing { 1_i64 } else { 0_i64 }).into());
         }
-        
-        let where_sql = if where_clauses.is_empty() {
-            String::new()
-        } else {
-            format!("WHERE {}", where_clauses.join(" AND "))
-        };
-        
-        // Get total count with filters applied
-        let count_sql = format!("SELECT COUNT(*) FROM library_items {}", where_sql);
-        let total_count: u64 = connection
-            .query_row(&count_sql, rusqlite::params_from_iter(params.iter()), |row| row.get(0))?;
-        
-        // Build ORDER BY from sort field
-        let order_by = query.sort.sql_order();
-        
-        // Keyset pagination: parse cursor as "created_at_ms:id" format
-        let (cursor_filter, cursor_params): (String, Vec<&dyn rusqlite::ToSql>) = 
-            query.cursor.as_deref()
-                .and_then(|c| c.split_once(':'))
-                .and_then(|(ts, id)| {
-                    ts.parse::<i64>().ok().map(|created_at| {
-                        match query.sort {
-                            LibrarySort::Newest => {
-                                (format!("AND (created_at_ms < ? OR (created_at_ms = ? AND id < ?))"), 
-                                 vec![&created_at as &dyn rusqlite::ToSql, &created_at, id])
-                            }
-                            LibrarySort::Oldest => {
-                                (format!("AND (created_at_ms > ? OR (created_at_ms = ? AND id > ?))"),
-                                 vec![&created_at as &dyn rusqlite::ToSql, &created_at, id])
-                            }
-                            _ => {
-                                // For non-time sorts, use simple offset
-                                (String::new(), vec![])
-                            }
-                        }
-                    })
-                })
-                .unwrap_or_else(|| (String::new(), vec![]));
-        
+
+        let filtered_where_sql = where_clause(&where_clauses);
+        let count_sql = format!("SELECT COUNT(*) FROM library_items {filtered_where_sql}");
+        let total_count = connection
+            .query_row(
+                &count_sql,
+                rusqlite::params_from_iter(values.iter()),
+                |row| row.get::<_, i64>(0),
+            )?
+            .max(0) as u64;
+
+        if matches!(query.sort, LibrarySort::Newest | LibrarySort::Oldest) {
+            if let Some((created_at, id)) = query
+                .cursor
+                .as_deref()
+                .and_then(|cursor| cursor.split_once(':'))
+                .and_then(|(timestamp, id)| timestamp.parse::<i64>().ok().map(|value| (value, id)))
+            {
+                let comparison = if query.sort == LibrarySort::Newest {
+                    "<"
+                } else {
+                    ">"
+                };
+                where_clauses.push(format!(
+                    "(created_at_ms {comparison} ? OR (created_at_ms = ? AND id {comparison} ?))"
+                ));
+                values.push(created_at.into());
+                values.push(created_at.into());
+                values.push(id.to_string().into());
+            }
+        }
+
         let limit = query.limit.unwrap_or(50).clamp(1, 100) as i64;
-        
         let sql = format!(
-            "SELECT * FROM library_items {} {} ORDER BY {} LIMIT ?",
-            where_sql, cursor_filter, order_by
+            "SELECT * FROM library_items {} ORDER BY {} LIMIT ?",
+            where_clause(&where_clauses),
+            query.sort.sql_order(),
         );
-        
-        let mut all_params = params;
-        all_params.extend(cursor_params);
-        all_params.push(&limit);
-        
+
+        values.push(limit.into());
         let mut statement = connection.prepare(&sql)?;
         let items = statement
-            .query_map(rusqlite::params_from_iter(all_params.iter()), row_to_library_item)?
+            .query_map(
+                rusqlite::params_from_iter(values.iter()),
+                row_to_library_item,
+            )?
             .collect::<Result<Vec<_>, _>>()?;
-        
-        // Update missing status for returned items
-        let mut typed_items: Vec<LibraryItem> = items.into_iter()
+
+        let next_cursor = if items.len() == limit as usize {
+            items
+                .last()
+                .map(|item| format!("{}:{}", item.created_at_ms, item.id))
+        } else {
+            None
+        };
+        let items = items
+            .into_iter()
             .map(|mut item| {
                 item.missing = !Path::new(&item.audio_path).is_file();
                 item
             })
-            .collect();
-        
-        // Calculate facets
-        let mut facets = LibraryFacets::default();
-        
-        // Missing count
-        facets.missing_count = connection
-            .query_row("SELECT COUNT(*) FROM library_items WHERE missing = 1", [], |row| row.get(0))?;
-        
-        // Format facets
+            .collect::<Vec<_>>();
+
+        let missing_count = connection
+            .query_row(
+                "SELECT COUNT(*) FROM library_items WHERE missing = 1",
+                [],
+                |row| row.get::<_, i64>(0),
+            )?
+            .max(0) as u64;
+        let mut facets = LibraryFacets {
+            missing_count,
+            ..Default::default()
+        };
+
         let mut fmt_stmt = connection.prepare(
-            "SELECT format, COUNT(*) as cnt FROM library_items GROUP BY format ORDER BY cnt DESC"
+            "SELECT format, COUNT(*) as cnt FROM library_items GROUP BY format ORDER BY cnt DESC",
         )?;
         facets.formats = fmt_stmt
             .query_map([], |row| {
                 Ok(FacetCount {
                     value: row.get::<_, String>(0)?,
-                    count: row.get::<_, u64>(1)?,
+                    count: row.get::<_, i64>(1)?.max(0) as u64,
                 })
             })?
             .filter_map(|r| r.ok())
             .collect();
-        
-        // Key facets
+
         let mut key_stmt = connection.prepare(
-            "SELECT musical_key, COUNT(*) as cnt FROM library_items WHERE musical_key IS NOT NULL GROUP BY musical_key ORDER BY cnt DESC LIMIT 20"
+            "SELECT musical_key, COUNT(*) as cnt FROM library_items WHERE musical_key IS NOT NULL GROUP BY musical_key ORDER BY cnt DESC LIMIT 20",
         )?;
         facets.keys = key_stmt
             .query_map([], |row| {
                 Ok(FacetCount {
                     value: row.get::<_, String>(0)?,
-                    count: row.get::<_, u64>(1)?,
+                    count: row.get::<_, i64>(1)?.max(0) as u64,
                 })
             })?
             .filter_map(|r| r.ok())
             .collect();
-        
-        // Next cursor using keyset pagination
-        let next_cursor = if items.len() == limit as usize {
-            items.last().map(|item| {
-                format!("{}:{}", item.created_at_ms, item.id)
-            })
-        } else {
-            None
-        };
-        
+
         Ok(LibraryPage {
-            items: typed_items,
+            items,
             next_cursor,
             total_count,
             facets,
@@ -994,63 +1052,64 @@ impl Repository {
     // ==================== Database Backup ====================
 
     pub fn backup_database(&self, conn: &Connection) -> AppResult<PathBuf> {
-        use std::io::Write;
-        
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| AppError::Internal("System time error".into()))?
             .as_millis() as i64;
-        
+
         let backup_filename = format!("sonic_backup_{}.sqlite3", timestamp);
         let backup_path = self.data_directory.join(backup_filename);
-        
-        // Use SQLite backup API
-        let backup_conn = Connection::open(&backup_path)?;
-        conn.backup(rusqlite::DatabaseName::Main, &backup_conn, None)?;
-        
+
+        conn.backup("main", &backup_path, None)?;
+
         Ok(backup_path)
     }
 
     // ==================== Library Roots ====================
 
     pub fn create_library_root(&self, label: &str, root_path: &str) -> AppResult<String> {
-        let mut conn = self.lock()?;
+        let conn = self.lock()?;
         let id = Uuid::new_v4().to_string();
         let now = now_ms();
-        
+
         conn.execute(
             "INSERT INTO library_roots(id, label, root_path, created_at_ms, updated_at_ms) VALUES(?1, ?2, ?3, ?4, ?5)",
             params![id, label, root_path, now, now],
         )?;
-        
+
         Ok(id)
     }
 
     pub fn list_library_roots(&self) -> AppResult<Vec<LibraryRoot>> {
         let conn = self.lock()?;
         let mut stmt = conn.prepare("SELECT * FROM library_roots ORDER BY created_at_ms ASC")?;
-        
-        stmt.query_map([], |row| {
-            Ok(LibraryRoot {
-                id: row.get("id")?,
-                label: row.get("label")?,
-                root_path: row.get("root_path")?,
-                created_at_ms: row.get("created_at_ms")?,
-                updated_at_ms: row.get("updated_at_ms")?,
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(AppError::from)
+        let roots = stmt
+            .query_map([], |row| {
+                Ok(LibraryRoot {
+                    id: row.get("id")?,
+                    label: row.get("label")?,
+                    root_path: row.get("root_path")?,
+                    created_at_ms: row.get("created_at_ms")?,
+                    updated_at_ms: row.get("updated_at_ms")?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(roots)
     }
 
-    pub fn update_library_root(&self, id: &str, label: Option<&str>, root_path: Option<&str>) -> AppResult<()> {
-        let mut conn = self.lock()?;
+    pub fn update_library_root(
+        &self,
+        id: &str,
+        label: Option<&str>,
+        root_path: Option<&str>,
+    ) -> AppResult<()> {
+        let conn = self.lock()?;
         let now = now_ms();
-        
+
         if label.is_none() && root_path.is_none() {
             return Ok(());
         }
-        
+
         match (label, root_path) {
             (Some(l), Some(p)) => {
                 conn.execute(
@@ -1072,61 +1131,61 @@ impl Repository {
             }
             (None, None) => {}
         }
-        
+
         Ok(())
     }
 
     pub fn delete_library_root(&self, id: &str) -> AppResult<()> {
         let conn = self.lock()?;
-        
+
         // Check if any items reference this root
         let count: i64 = conn.query_row(
             "SELECT COUNT(*) FROM library_items WHERE root_id=?1",
             [id],
             |row| row.get(0),
         )?;
-        
+
         if count > 0 {
             return Err(AppError::Internal(
                 "Cannot delete root with existing library items".into(),
             ));
         }
-        
+
         conn.execute("DELETE FROM library_roots WHERE id=?1", [id])?;
         Ok(())
     }
 
     pub fn relink_library_root(&self, id: &str, new_root_path: &str) -> AppResult<usize> {
-        let mut conn = self.lock()?;
+        let conn = self.lock()?;
         let now = now_ms();
-        
+
         // Update the root path
         conn.execute(
             "UPDATE library_roots SET root_path=?1, updated_at_ms=?2 WHERE id=?3",
             params![new_root_path, now, id],
         )?;
-        
+
         // Update all items referencing this root to mark them for re-validation
         let affected = conn.execute(
             "UPDATE library_items SET missing=0, updated_at_ms=?1 WHERE root_id=?2",
             params![now, id],
         )?;
-        
+
         Ok(affected)
     }
 
     // ==================== Tags ====================
 
     pub fn create_tag(&self, name: &str, color: Option<&str>) -> AppResult<String> {
-        let mut conn = self.lock()?;
+        let conn = self.lock()?;
         let id = Uuid::new_v4().to_string();
         let now = now_ms();
-        
+
         conn.execute(
             "INSERT INTO tags(id, name, color, created_at_ms) VALUES(?1, ?2, ?3, ?4)",
             params![id, name, color, now],
         )?;
-        
+
         Ok(id)
     }
 
@@ -1139,29 +1198,30 @@ impl Repository {
              GROUP BY t.id 
              ORDER BY t.name COLLATE NOCASE ASC",
         )?;
-        
-        stmt.query_map([], |row| {
-            Ok((
-                Tag {
-                    id: row.get("id")?,
-                    name: row.get("name")?,
-                    color: row.get("color")?,
-                    created_at_ms: row.get("created_at_ms")?,
-                },
-                row.get::<_, u64>("usage_count")?,
-            ))
-        })?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(AppError::from)
+
+        let tags = stmt
+            .query_map([], |row| {
+                Ok((
+                    Tag {
+                        id: row.get("id")?,
+                        name: row.get("name")?,
+                        color: row.get("color")?,
+                        created_at_ms: row.get("created_at_ms")?,
+                    },
+                    row.get::<_, i64>("usage_count")?.max(0) as u64,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(tags)
     }
 
     pub fn update_tag(&self, id: &str, name: Option<&str>, color: Option<&str>) -> AppResult<()> {
-        let mut conn = self.lock()?;
-        
+        let conn = self.lock()?;
+
         if name.is_none() && color.is_none() {
             return Ok(());
         }
-        
+
         match (name, color) {
             (Some(n), Some(c)) => {
                 conn.execute(
@@ -1177,7 +1237,7 @@ impl Repository {
             }
             (None, None) => {}
         }
-        
+
         Ok(())
     }
 
@@ -1188,14 +1248,14 @@ impl Repository {
     }
 
     pub fn assign_tag_to_item(&self, item_id: &str, tag_id: &str) -> AppResult<()> {
-        let mut conn = self.lock()?;
+        let conn = self.lock()?;
         let now = now_ms();
-        
+
         conn.execute(
             "INSERT OR IGNORE INTO library_item_tags(item_id, tag_id, created_at_ms) VALUES(?1, ?2, ?3)",
             params![item_id, tag_id, now],
         )?;
-        
+
         Ok(())
     }
 
@@ -1216,17 +1276,18 @@ impl Repository {
              WHERE lit.item_id = ?1 
              ORDER BY t.name COLLATE NOCASE ASC",
         )?;
-        
-        stmt.query_map([item_id], |row| {
-            Ok(Tag {
-                id: row.get("id")?,
-                name: row.get("name")?,
-                color: row.get("color")?,
-                created_at_ms: row.get("created_at_ms")?,
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(AppError::from)
+
+        let tags = stmt
+            .query_map([item_id], |row| {
+                Ok(Tag {
+                    id: row.get("id")?,
+                    name: row.get("name")?,
+                    color: row.get("color")?,
+                    created_at_ms: row.get("created_at_ms")?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(tags)
     }
 
     // ==================== Collections ====================
@@ -1238,15 +1299,15 @@ impl Repository {
         is_smart: bool,
         query_json: Option<&str>,
     ) -> AppResult<String> {
-        let mut conn = self.lock()?;
+        let conn = self.lock()?;
         let id = Uuid::new_v4().to_string();
         let now = now_ms();
-        
+
         conn.execute(
             "INSERT INTO collections(id, name, description, is_smart, query_json, created_at_ms, updated_at_ms) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?6)",
             params![id, name, description, if is_smart { 1i64 } else { 0i64 }, query_json, now],
         )?;
-        
+
         Ok(id)
     }
 
@@ -1259,23 +1320,24 @@ impl Repository {
              GROUP BY c.id 
              ORDER BY c.created_at_ms DESC",
         )?;
-        
-        stmt.query_map([], |row| {
-            Ok((
-                Collection {
-                    id: row.get("id")?,
-                    name: row.get("name")?,
-                    description: row.get("description")?,
-                    is_smart: row.get::<_, i64>("is_smart")? != 0,
-                    query_json: row.get("query_json")?,
-                    created_at_ms: row.get("created_at_ms")?,
-                    updated_at_ms: row.get("updated_at_ms")?,
-                },
-                row.get::<_, u64>("item_count")?,
-            ))
-        })?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(AppError::from)
+
+        let collections = stmt
+            .query_map([], |row| {
+                Ok((
+                    Collection {
+                        id: row.get("id")?,
+                        name: row.get("name")?,
+                        description: row.get("description")?,
+                        is_smart: row.get::<_, i64>("is_smart")? != 0,
+                        query_json: row.get("query_json")?,
+                        created_at_ms: row.get("created_at_ms")?,
+                        updated_at_ms: row.get("updated_at_ms")?,
+                    },
+                    row.get::<_, i64>("item_count")?.max(0) as u64,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(collections)
     }
 
     pub fn update_collection(
@@ -1286,40 +1348,40 @@ impl Repository {
         is_smart: Option<bool>,
         query_json: Option<&str>,
     ) -> AppResult<()> {
-        let mut conn = self.lock()?;
+        let conn = self.lock()?;
         let now = now_ms();
-        
+
         if name.is_none() && description.is_none() && is_smart.is_none() && query_json.is_none() {
             return Ok(());
         }
-        
+
         let mut updates = Vec::new();
-        let mut params_vec: Vec<&dyn rusqlite::ToSql> = Vec::new();
-        
+        let mut values = Vec::<rusqlite::types::Value>::new();
+
         if let Some(n) = name {
             updates.push("name=?");
-            params_vec.push(n);
+            values.push(n.to_string().into());
         }
         if let Some(d) = description {
             updates.push("description=?");
-            params_vec.push(d);
+            values.push(d.to_string().into());
         }
         if let Some(s) = is_smart {
             updates.push("is_smart=?");
-            params_vec.push(&(if s { 1i64 } else { 0i64 }));
+            values.push((if s { 1_i64 } else { 0_i64 }).into());
         }
         if let Some(q) = query_json {
             updates.push("query_json=?");
-            params_vec.push(q);
+            values.push(q.to_string().into());
         }
-        
+
         updates.push("updated_at_ms=?");
-        params_vec.push(&now);
-        params_vec.push(&id);
-        
+        values.push(now.into());
+        values.push(id.to_string().into());
+
         let sql = format!("UPDATE collections SET {} WHERE id=?", updates.join(","));
-        conn.execute(&sql, rusqlite::params_from_iter(params_vec.iter()))?;
-        
+        conn.execute(&sql, rusqlite::params_from_iter(values.iter()))?;
+
         Ok(())
     }
 
@@ -1329,26 +1391,34 @@ impl Repository {
         Ok(())
     }
 
-    pub fn add_items_to_collection(&self, collection_id: &str, item_ids: &[&str]) -> AppResult<usize> {
-        let mut conn = self.lock()?;
+    pub fn add_items_to_collection(
+        &self,
+        collection_id: &str,
+        item_ids: &[&str],
+    ) -> AppResult<usize> {
+        let conn = self.lock()?;
         let now = now_ms();
         let mut count = 0;
-        
+
         for item_id in item_ids {
             let affected = conn.execute(
                 "INSERT OR IGNORE INTO collection_items(collection_id, item_id, position, created_at_ms) VALUES(?1, ?2, ?3, ?4)",
-                params![collection_id, item_id, count, now],
+                params![collection_id, item_id, count as i64, now],
             )?;
             count += affected;
         }
-        
+
         Ok(count)
     }
 
-    pub fn remove_items_from_collection(&self, collection_id: &str, item_ids: &[&str]) -> AppResult<usize> {
+    pub fn remove_items_from_collection(
+        &self,
+        collection_id: &str,
+        item_ids: &[&str],
+    ) -> AppResult<usize> {
         let conn = self.lock()?;
         let mut total_removed = 0;
-        
+
         for item_id in item_ids {
             let affected = conn.execute(
                 "DELETE FROM collection_items WHERE collection_id=?1 AND item_id=?2",
@@ -1356,22 +1426,17 @@ impl Repository {
             )?;
             total_removed += affected;
         }
-        
-        Ok(total_removed)
-    }
 
-    pub fn get_collection_items(&self, collection_id: &str, query: &LibraryQuery) -> AppResult<LibraryPage> {
-        // For now, delegate to list_library - smart collection filtering would go here
-        self.list_library(query)
+        Ok(total_removed)
     }
 
     // ==================== Bulk Operations ====================
 
     pub fn bulk_tag_items(&self, item_ids: &[&str], tag_ids: &[&str]) -> AppResult<usize> {
-        let mut conn = self.lock()?;
+        let conn = self.lock()?;
         let now = now_ms();
         let mut count = 0;
-        
+
         for item_id in item_ids {
             for tag_id in tag_ids {
                 let affected = conn.execute(
@@ -1381,98 +1446,88 @@ impl Repository {
                 count += affected;
             }
         }
-        
+
         Ok(count)
     }
 
-    pub fn bulk_remove_tags_from_items(&self, item_ids: &[&str], tag_ids: &[&str]) -> AppResult<usize> {
-        let mut conn = self.lock()?;
-        let mut total_removed = 0;
-        
-        for item_id in item_ids {
-            for tag_id in tag_ids {
-                let affected = conn.execute(
-                    "DELETE FROM library_item_tags WHERE item_id=?1 AND tag_id=?2",
-                    params![item_id, tag_id],
-                )?;
-                total_removed += affected;
-            }
-        }
-        
-        Ok(total_removed)
-    }
-
-    pub fn bulk_update_items(&self, item_ids: &[&str], updates: &crate::models::BulkUpdateRequest) -> AppResult<usize> {
-        let mut conn = self.lock()?;
+    pub fn bulk_update_items(
+        &self,
+        item_ids: &[&str],
+        updates: &crate::models::BulkUpdateRequest,
+    ) -> AppResult<usize> {
+        let conn = self.lock()?;
         let now = now_ms();
         let mut total_updated = 0;
-        
+
         for item_id in item_ids {
             let mut updates_vec = Vec::new();
-            let mut params_vec: Vec<&dyn rusqlite::ToSql> = Vec::new();
-            
+            let mut values = Vec::<rusqlite::types::Value>::new();
+
             if let Some(ref title) = updates.title {
                 updates_vec.push("title=?");
-                params_vec.push(title);
+                values.push(title.clone().into());
             }
             if let Some(ref artist) = updates.artist {
                 updates_vec.push("artist=?");
-                params_vec.push(artist);
+                values.push(artist.clone().into());
             }
             if let Some(bpm) = updates.bpm {
                 updates_vec.push("bpm=?");
-                params_vec.push(&bpm);
+                values.push(bpm.into());
             }
             if let Some(ref key) = updates.key {
                 updates_vec.push("musical_key=?");
-                params_vec.push(key);
+                values.push(key.clone().into());
             }
             if let Some(ref camelot) = updates.camelot {
                 updates_vec.push("camelot=?");
-                params_vec.push(camelot);
+                values.push(camelot.clone().into());
             }
             if let Some(rating) = updates.rating {
                 updates_vec.push("rating=?");
-                params_vec.push(&rating);
+                values.push(rating.into());
             }
             if let Some(is_favorite) = updates.is_favorite {
                 updates_vec.push("is_favorite=?");
-                params_vec.push(&(if is_favorite { 1i64 } else { 0i64 }));
+                values.push((if is_favorite { 1_i64 } else { 0_i64 }).into());
             }
             if let Some(ref status) = updates.status {
                 updates_vec.push("status=?");
-                params_vec.push(status);
+                values.push(status.clone().into());
             }
             if let Some(ref color_label) = updates.color_label {
                 updates_vec.push("color_label=?");
-                params_vec.push(color_label);
+                values.push(color_label.clone().into());
             }
-            
+
             if updates_vec.is_empty() {
                 continue;
             }
-            
+
             updates_vec.push("updated_at_ms=?");
-            params_vec.push(&now);
-            params_vec.push(item_id);
-            
-            let sql = format!("UPDATE library_items SET {} WHERE id=?", updates_vec.join(","));
-            let affected = conn.execute(&sql, rusqlite::params_from_iter(params_vec.iter()))?;
+            values.push(now.into());
+            values.push((*item_id).to_string().into());
+
+            let sql = format!(
+                "UPDATE library_items SET {} WHERE id=?",
+                updates_vec.join(",")
+            );
+            let affected = conn.execute(&sql, rusqlite::params_from_iter(values.iter()))?;
             total_updated += affected;
         }
-        
+
         Ok(total_updated)
     }
 
     pub fn bulk_delete_items(&self, item_ids: &[&str]) -> AppResult<usize> {
-        let mut conn = self.lock()?;
+        let conn = self.lock()?;
         let mut total_deleted = 0;
-        
+
         for item_id in item_ids {
             let affected = conn.execute("DELETE FROM library_items WHERE id=?1", [item_id])?;
             total_deleted += affected;
         }
-        
+
         Ok(total_deleted)
     }
 
@@ -1487,15 +1542,16 @@ impl Repository {
              HAVING COUNT(*) > 1 
              ORDER BY cnt DESC",
         )?;
-        
+
         let groups = stmt
             .query_map([], |row| {
                 let sha256: String = row.get("sha256")?;
                 let item_ids_str: String = row.get("item_ids")?;
                 let count: i64 = row.get("cnt")?;
-                
-                let item_ids: Vec<String> = item_ids_str.split(',').map(|s| s.to_string()).collect();
-                
+
+                let item_ids: Vec<String> =
+                    item_ids_str.split(',').map(|s| s.to_string()).collect();
+
                 Ok(crate::models::DuplicateGroup {
                     group_type: "exact_sha256".to_string(),
                     fingerprint: sha256,
@@ -1505,28 +1561,32 @@ impl Repository {
             })?
             .collect::<Result<Vec<_>, _>>()
             .map_err(AppError::from)?;
-        
+
         Ok(groups)
     }
 
-    pub fn find_duplicates_by_source_fingerprint(&self) -> AppResult<Vec<crate::models::DuplicateGroup>> {
+    pub fn find_duplicates_by_source_fingerprint(
+        &self,
+    ) -> AppResult<Vec<crate::models::DuplicateGroup>> {
         let conn = self.lock()?;
         let mut stmt = conn.prepare(
-            "SELECT json_extract(source_json, '$.source_fingerprint') as fp, GROUP_CONCAT(id) as item_ids, COUNT(*) as cnt 
-             FROM library_items 
-             GROUP BY fp 
+            "SELECT source_json as fp, GROUP_CONCAT(id) as item_ids, COUNT(*) as cnt
+             FROM library_items
+             WHERE source_json IS NOT NULL AND source_json <> ''
+             GROUP BY source_json
              HAVING COUNT(*) > 1 
              ORDER BY cnt DESC",
         )?;
-        
+
         let groups = stmt
             .query_map([], |row| {
                 let fp: Option<String> = row.get("fp")?;
                 let item_ids_str: String = row.get("item_ids")?;
                 let count: i64 = row.get("cnt")?;
-                
-                let item_ids: Vec<String> = item_ids_str.split(',').map(|s| s.to_string()).collect();
-                
+
+                let item_ids: Vec<String> =
+                    item_ids_str.split(',').map(|s| s.to_string()).collect();
+
                 Ok(crate::models::DuplicateGroup {
                     group_type: "same_source".to_string(),
                     fingerprint: fp.unwrap_or_default(),
@@ -1536,43 +1596,22 @@ impl Repository {
             })?
             .collect::<Result<Vec<_>, _>>()
             .map_err(AppError::from)?;
-        
+
         Ok(groups)
-    }
-
-    pub fn create_track_variant(&self, source_fingerprint: &str) -> AppResult<String> {
-        let mut conn = self.lock()?;
-        let id = Uuid::new_v4().to_string();
-        let now = now_ms();
-        
-        conn.execute(
-            "INSERT INTO track_variants(id, source_fingerprint, created_at_ms) VALUES(?1, ?2, ?3)",
-            params![id, source_fingerprint, now],
-        )?;
-        
-        Ok(id)
-    }
-
-    pub fn link_item_to_variant(&self, item_id: &str, variant_id: &str) -> AppResult<()> {
-        let conn = self.lock()?;
-        conn.execute(
-            "UPDATE library_items SET variant_group_id=?1 WHERE id=?2",
-            params![variant_id, item_id],
-        )?;
-        Ok(())
     }
 
     // ==================== Sidecar Import ====================
 
-    pub fn scan_sidecar_folder(&self, folder_path: &str, recursive: bool) -> AppResult<crate::models::SidecarImportReport> {
-        use std::fs;
-        use crate::sidecar::SidecarFile;
-        
+    pub fn scan_sidecar_folder(
+        &self,
+        folder_path: &str,
+        recursive: bool,
+    ) -> AppResult<crate::models::SidecarImportReport> {
         let folder = Path::new(folder_path);
         if !folder.is_dir() {
-            return Err(AppError::Internal("Folder does not exist".into()));
+            return Err(invalid("The sidecar folder does not exist"));
         }
-        
+
         let mut report = crate::models::SidecarImportReport {
             scanned_count: 0,
             imported_count: 0,
@@ -1580,86 +1619,188 @@ impl Repository {
             error_count: 0,
             errors: Vec::new(),
         };
-        
-        // Collect sidecar files
-        let mut sidecar_files = Vec::new();
-        if recursive {
-            for entry in fs::read_dir(folder).map_err(|e| AppError::Filesystem(e))? {
-                let entry = entry.map_err(|e| AppError::Filesystem(e))?;
-                let path = entry.path();
-                if path.is_dir() {
-                    // Recursive walk
-                    for sub_entry in walkdir::WalkDir::new(&path).into_iter().flatten() {
-                        let sub_path = sub_entry.path();
-                        if sub_path.extension().and_then(|e| e.to_str()) == Some("sonic.json") {
-                            sidecar_files.push(sub_path.to_path_buf());
-                        }
-                    }
-                } else if path.extension().and_then(|e| e.to_str()) == Some("sonic.json") {
-                    sidecar_files.push(path);
-                }
-            }
+
+        let is_sidecar = |path: &Path| {
+            path.is_file()
+                && path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.ends_with(".sonic.json"))
+        };
+        let sidecar_files = if recursive {
+            walkdir::WalkDir::new(folder)
+                .follow_links(false)
+                .into_iter()
+                .filter_map(Result::ok)
+                .map(|entry| entry.into_path())
+                .filter(|path| is_sidecar(path))
+                .collect::<Vec<_>>()
         } else {
-            for entry in fs::read_dir(folder).map_err(|e| AppError::Filesystem(e))? {
-                let entry = entry.map_err(|e| AppError::Filesystem(e))?;
-                let path = entry.path();
-                if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("sonic.json") {
-                    sidecar_files.push(path);
-                }
-            }
-        }
-        
+            fs::read_dir(folder)?
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                .filter(|path| is_sidecar(path))
+                .collect::<Vec<_>>()
+        };
+
         report.scanned_count = sidecar_files.len() as u64;
-        
-        // Process each sidecar
         for sidecar_path in sidecar_files {
-            match self.import_sidecar_file(sidecar_path.to_str().unwrap_or("")) {
-                Ok(_) => report.imported_count += 1,
-                Err(e) => {
+            match self.import_sidecar_file(&sidecar_path) {
+                Ok(true) => report.imported_count += 1,
+                Ok(false) => report.skipped_count += 1,
+                Err(error) => {
                     report.error_count += 1;
                     report.errors.push(crate::models::SidecarImportError {
-                        path: sidecar_path.to_string_lossy().to_string(),
-                        error: e.to_string(),
-                        error_code: "import_failed".to_string(),
+                        path: sidecar_path.to_string_lossy().into_owned(),
+                        error: error.public_message(),
+                        error_code: "import_failed".into(),
                     });
                 }
             }
         }
-        
+
         Ok(report)
     }
 
-    fn import_sidecar_file(&self, sidecar_path: &str) -> AppResult<i64> {
-        use crate::sidecar::SidecarFile;
-        
-        // Read and parse sidecar
-        let content = fs::read_to_string(sidecar_path)?;
-        let sidecar: SidecarFile = serde_json::from_str(&content)
-            .map_err(|e| AppError::Internal(format!("Invalid sidecar JSON: {}", e)))?;
-        
-        // Check if already exists
-        let conn = self.lock()?;
-        let exists: bool = conn.query_row(
-            "SELECT EXISTS(SELECT 1 FROM library_items WHERE id=?1)",
-            [&sidecar.id],
-            |row| row.get(0),
-        )?;
-        
-        if exists {
-            return Ok(-1); // Already exists, skipped
+    fn import_sidecar_file(&self, sidecar_path: &Path) -> AppResult<bool> {
+        let sidecar = crate::sidecar::read_sidecar(sidecar_path)?;
+        let audio_path = crate::filesystem::audio_path_for_sidecar(sidecar_path)?;
+        if !audio_path.is_file() {
+            return Err(invalid("The sidecar audio file is missing"));
         }
-        
-        // Reconstruct library item from sidecar
-        // This is a simplified version - full implementation would validate audio file existence
-        drop(conn);
-        
-        Ok(0) // Placeholder - full implementation in next iteration
+        if crate::tools::sha256_file(&audio_path)? != sidecar.output_sha256 {
+            return Err(invalid("The sidecar audio hash does not match"));
+        }
+
+        let exists = self.lock()?.query_row(
+            "SELECT EXISTS(SELECT 1 FROM library_items WHERE id=?1)",
+            [&sidecar.library_item_id],
+            |row| row.get::<_, bool>(0),
+        )?;
+        if exists {
+            return Ok(false);
+        }
+
+        let source = match sidecar.source.kind.as_str() {
+            "youtube" => SourceSpec::Youtube {
+                url: sidecar.source.canonical_url.clone().unwrap_or_default(),
+            },
+            "soundcloud" => SourceSpec::Soundcloud {
+                url: sidecar.source.canonical_url.clone().unwrap_or_default(),
+            },
+            "localFile" => SourceSpec::LocalFile {
+                path: sidecar
+                    .source
+                    .original_path
+                    .clone()
+                    .or_else(|| sidecar.source.file_name.clone())
+                    .unwrap_or_default(),
+            },
+            _ => return Err(invalid("The sidecar source kind is invalid")),
+        };
+        let import_request = EnqueueItem {
+            client_item_id: sidecar.client_item_id.clone(),
+            source: source.clone(),
+            expected_fingerprint: Some(sidecar.source.source_fingerprint.clone()),
+            inspection: crate::models::SourceInspection {
+                id: format!("sidecar:{}", sidecar.library_item_id),
+                source: source.clone(),
+                source_fingerprint: sidecar.source.source_fingerprint.clone(),
+                title: sidecar.metadata.title.clone(),
+                artist: sidecar.metadata.artist.clone(),
+                description: None,
+                thumbnail_url: None,
+                webpage_url: sidecar.source.canonical_url.clone(),
+                is_live: false,
+                audio: sidecar.inspection_audio.clone(),
+                declared_metadata: crate::metadata::MusicMetadata::default(),
+                embedded_metadata: crate::metadata::MusicMetadata::default(),
+                suggested_metadata: crate::metadata::MusicMetadata::default(),
+                audio_analysis: sidecar.audio_analysis.clone(),
+                warnings: vec![],
+            },
+            metadata: sidecar.metadata.clone(),
+            export: sidecar.export.clone(),
+            output_directory: audio_path
+                .parent()
+                .map(external_path_string)
+                .transpose()?
+                .unwrap_or_default(),
+            filename_template: "{title}".into(),
+        };
+        let inserted_job = self.lock()?.execute(
+            "INSERT OR IGNORE INTO jobs(
+              id,client_item_id,state,queue_position,revision,request_json,progress_json,
+              attempt,created_at_ms,finished_at_ms,updated_at_ms
+            ) VALUES(?1,?2,'completed',0,1,?3,'{}',0,?4,?4,?4)",
+            params![
+                sidecar.job_id,
+                sidecar.client_item_id,
+                serde_json::to_string(&import_request)?,
+                sidecar.created_at_ms,
+            ],
+        )?;
+        let audio_metadata = fs::metadata(&audio_path)?;
+        let item = LibraryItem {
+            id: sidecar.library_item_id,
+            job_id: sidecar.job_id,
+            client_item_id: sidecar.client_item_id,
+            source,
+            title: sidecar.metadata.title,
+            artist: sidecar.metadata.artist,
+            thumbnail_url: None,
+            bpm: sidecar.metadata.bpm,
+            alternate_bpms: sidecar.metadata.alternate_bpms,
+            key: sidecar.metadata.key,
+            camelot: sidecar.metadata.camelot,
+            detune_cents: sidecar.metadata.detune_cents,
+            tuning_hz: sidecar.metadata.tuning_hz,
+            preset_id: sidecar.export.preset_id,
+            format: sidecar
+                .output_audio
+                .container
+                .clone()
+                .or_else(|| {
+                    audio_path
+                        .extension()
+                        .map(|value| value.to_string_lossy().into_owned())
+                })
+                .unwrap_or_else(|| "audio".into()),
+            codec: sidecar.output_audio.codec,
+            duration_ms: sidecar.output_audio.duration_ms,
+            sample_rate_hz: sidecar.output_audio.sample_rate_hz,
+            channels: sidecar.output_audio.channels,
+            audio_path: external_path_string(&audio_path)?,
+            sidecar_path: external_path_string(sidecar_path)?,
+            file_size_bytes: audio_metadata.len(),
+            sha256: sidecar.output_sha256,
+            missing: false,
+            created_at_ms: sidecar.created_at_ms,
+            updated_at_ms: sidecar.created_at_ms,
+        };
+        if let Err(error) = self.insert_library_item(&item) {
+            if inserted_job == 1 {
+                let _ = self
+                    .lock()?
+                    .execute("DELETE FROM jobs WHERE id=?1", [&item.job_id]);
+            }
+            return Err(error);
+        }
+        Ok(true)
     }
 
     fn lock(&self) -> AppResult<std::sync::MutexGuard<'_, Connection>> {
         self.connection
             .lock()
             .map_err(|_| AppError::Internal("The local database is unavailable".into()))
+    }
+}
+
+fn where_clause(clauses: &[String]) -> String {
+    if clauses.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", clauses.join(" AND "))
     }
 }
 
@@ -1848,6 +1989,7 @@ mod tests {
     use crate::{
         metadata::MusicMetadata,
         models::{AudioProperties, ExportSpec, FinalMetadata, SourceInspection, SourceSpec},
+        sidecar::{SidecarSource, SonicSidecar, TagStatus, SIDECAR_SCHEMA_VERSION},
     };
 
     fn repository() -> (Repository, PathBuf) {
@@ -1886,6 +2028,7 @@ mod tests {
                 declared_metadata: MusicMetadata::default(),
                 embedded_metadata: MusicMetadata::default(),
                 suggested_metadata: MusicMetadata::default(),
+                audio_analysis: None,
                 warnings: vec![],
             },
             metadata: FinalMetadata {
@@ -1938,6 +2081,51 @@ mod tests {
             .unwrap();
         assert_eq!(retried.state, JobState::Queued);
         assert_eq!(retried.attempt, 1);
+        drop(repository);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn apply_detected_bpm_is_revision_safe_and_preserves_manual_values() {
+        use crate::audio_analysis::{AudioAnalysis, TempoEstimate, ANALYZER_VERSION};
+
+        let (repository, root) = repository();
+        let analysis = AudioAnalysis {
+            source_sha256: "a".repeat(64),
+            analyzer_version: ANALYZER_VERSION.into(),
+            analyzed_duration_ms: 30_000,
+            bpm: Some(TempoEstimate {
+                primary: 128.0,
+                alternates: vec![64.0, 256.0],
+                confidence: 0.9,
+            }),
+            key: None,
+            warnings: vec![],
+        };
+
+        let blank_job = repository.insert_job(&request("blank-analysis")).unwrap();
+        let claimed = repository.claim_next_job().unwrap().unwrap();
+        assert!(repository
+            .apply_audio_analysis(&blank_job.id, blank_job.revision, &analysis)
+            .is_err());
+        let applied = repository
+            .apply_audio_analysis(&blank_job.id, claimed.summary.revision, &analysis)
+            .unwrap();
+        assert_eq!(applied.request.metadata.bpm, Some(128.0));
+        assert!(applied.request.inspection.audio_analysis.is_some());
+
+        repository
+            .fail_job(&blank_job.id, "test", "advance queue")
+            .unwrap();
+        let mut manual_request = request("manual-analysis");
+        manual_request.metadata.bpm = Some(140.0);
+        repository.insert_job(&manual_request).unwrap();
+        let manual = repository.claim_next_job().unwrap().unwrap();
+        let applied = repository
+            .apply_audio_analysis(&manual.summary.id, manual.summary.revision, &analysis)
+            .unwrap();
+        assert_eq!(applied.request.metadata.bpm, Some(140.0));
+
         drop(repository);
         fs::remove_dir_all(root).unwrap();
     }
@@ -2040,27 +2228,15 @@ mod tests {
     }
 
     #[test]
-    fn migration_creates_v2_tables_successfully() {
+    fn initialization_applies_all_library_intelligence_migrations() {
         let (repository, root) = repository();
-        
-        // Verify v1 schema is in place
+
         let conn = repository.lock().unwrap();
-        let version: u32 = conn.pragma_query_value(None, "user_version", |row| row.get(0)).unwrap();
-        assert_eq!(version, 1);
-        drop(conn);
-        
-        // Manually trigger v1->v2 migration by updating DB_SCHEMA_VERSION temporarily
-        // This tests that the migration functions work correctly
-        let result = repository.migrate_v1_to_v2(&mut repository.lock().unwrap());
-        
-        // Migration should succeed
-        assert!(result.is_ok());
-        
-        // Verify v2 schema is now active
-        let conn = repository.lock().unwrap();
-        let version: u32 = conn.pragma_query_value(None, "user_version", |row| row.get(0)).unwrap();
-        assert_eq!(version, 2);
-        
+        let version: u32 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, DB_SCHEMA_VERSION);
+
         // Verify new tables exist
         let table_exists: bool = conn
             .query_row(
@@ -2069,8 +2245,11 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert!(table_exists, "library_roots table should exist after v2 migration");
-        
+        assert!(
+            table_exists,
+            "library_roots table should exist after v2 migration"
+        );
+
         let table_exists: bool = conn
             .query_row(
                 "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='tags'",
@@ -2079,7 +2258,7 @@ mod tests {
             )
             .unwrap();
         assert!(table_exists, "tags table should exist after v2 migration");
-        
+
         let table_exists: bool = conn
             .query_row(
                 "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='collections'",
@@ -2087,38 +2266,123 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert!(table_exists, "collections table should exist after v2 migration");
-        
-        // Verify new columns exist in library_items
-        let column_exists: bool = conn
-            .query_row(
-                "PRAGMA table_info(library_items)",
-                [],
-                |row| Ok((row.get::<_, String>(1)?, row.get::<_, String>(2)?)),
-            )
-            .and_then(|(name, _type)| Ok(name == "is_favorite"))
-            .is_ok();
-        
+        assert!(
+            table_exists,
+            "collections table should exist after v2 migration"
+        );
+
+        let columns = conn
+            .prepare("PRAGMA table_info(library_items)")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert!(columns.iter().any(|name| name == "is_favorite"));
+        assert!(columns.iter().any(|name| name == "variant_group_id"));
+
         drop(conn);
+        drop(repository);
         fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
     fn database_backup_created_before_migration() {
         let (repository, root) = repository();
-        
+
         // Create a backup
         let conn = repository.lock().unwrap();
         let backup_result = repository.backup_database(&conn);
         drop(conn);
-        
-        assert!(backup_result.is_ok(), "Backup should be created successfully");
+
+        assert!(
+            backup_result.is_ok(),
+            "Backup should be created successfully"
+        );
         let backup_path = backup_result.unwrap();
         assert!(backup_path.exists(), "Backup file should exist");
-        assert!(backup_path.ends_with(".sqlite3"), "Backup should have .sqlite3 extension");
-        
+        assert!(
+            backup_path
+                .extension()
+                .is_some_and(|value| value == "sqlite3"),
+            "Backup should have .sqlite3 extension"
+        );
+
         // Clean up
         let _ = fs::remove_file(&backup_path);
+        drop(repository);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn nested_sidecar_scan_imports_verified_audio_without_an_existing_job() {
+        let (repository, root) = repository();
+        let audio_path = root.join("import.wav");
+        let sidecar_directory = root.join(".json");
+        fs::create_dir(&sidecar_directory).unwrap();
+        let sidecar_path = sidecar_directory.join("import.wav.sonic.json");
+        fs::write(&audio_path, b"verified synthetic audio").unwrap();
+        let hash = crate::tools::sha256_file(&audio_path).unwrap();
+        let sidecar = SonicSidecar {
+            schema_version: SIDECAR_SCHEMA_VERSION,
+            sonic_version: env!("CARGO_PKG_VERSION").into(),
+            library_item_id: "imported-item".into(),
+            job_id: "imported-job".into(),
+            client_item_id: None,
+            created_at_ms: 123,
+            source: SidecarSource {
+                kind: "localFile".into(),
+                source_fingerprint: "sha256:source".into(),
+                provider_id: None,
+                canonical_url: None,
+                file_name: Some("source.wav".into()),
+                original_path: None,
+            },
+            metadata: FinalMetadata {
+                title: "Imported beat".into(),
+                ..Default::default()
+            },
+            audio_analysis: None,
+            inspection_audio: AudioProperties::default(),
+            output_audio: AudioProperties {
+                container: Some("wav".into()),
+                file_size_bytes: Some(24),
+                ..Default::default()
+            },
+            export: ExportSpec::default(),
+            output_sha256: hash,
+            tag_status: TagStatus {
+                requested: false,
+                supported: true,
+                readback_verified: true,
+                warnings: vec![],
+            },
+        };
+        fs::write(&sidecar_path, serde_json::to_vec(&sidecar).unwrap()).unwrap();
+
+        let report = repository
+            .scan_sidecar_folder(root.to_str().unwrap(), true)
+            .unwrap();
+        assert_eq!(report.imported_count, 1);
+        assert_eq!(report.error_count, 0);
+        assert_eq!(
+            repository.library_item("imported-item").unwrap().title,
+            "Imported beat"
+        );
+        assert_eq!(
+            PathBuf::from(
+                repository
+                    .job_detail("imported-job")
+                    .unwrap()
+                    .request
+                    .output_directory
+            )
+            .canonicalize()
+            .unwrap(),
+            root.canonicalize().unwrap()
+        );
+
+        drop(repository);
         fs::remove_dir_all(root).unwrap();
     }
 }

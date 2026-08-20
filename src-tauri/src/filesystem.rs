@@ -265,6 +265,7 @@ fn template_value(
             .unwrap_or_default(),
         "source" => match source {
             Some(SourceSpec::Youtube { .. }) => "YouTube".to_string(),
+            Some(SourceSpec::Soundcloud { .. }) => "SoundCloud".to_string(),
             Some(SourceSpec::LocalFile { .. }) => "Local".to_string(),
             None => String::new(),
         },
@@ -389,6 +390,7 @@ pub fn publish_pair(
         .extension()
         .and_then(|value| value.to_str())
         .ok_or_else(|| invalid("The completed audio file had no extension"))?;
+    let sidecar_directory = canonical_sidecar_directory(output_directory)?;
     let audio_hash = sha256_file(staged_audio)?;
     let sidecar_hash = sha256_file(staged_sidecar)?;
     for suffix in 1..10_000_u32 {
@@ -397,8 +399,9 @@ pub fn publish_pair(
         } else {
             sanitize_file_stem(&format!("{requested_stem} ({suffix})"))
         };
-        let audio_destination = output_directory.join(format!("{stem}.{extension}"));
-        let sidecar_destination = output_directory.join(format!("{stem}.sonic.json"));
+        let audio_name = format!("{stem}.{extension}");
+        let audio_destination = output_directory.join(&audio_name);
+        let sidecar_destination = sidecar_directory.join(format!("{audio_name}.sonic.json"));
         if audio_destination.exists() || sidecar_destination.exists() {
             continue;
         }
@@ -423,7 +426,7 @@ pub fn publish_pair(
                 let canonical_audio = audio_destination.canonicalize()?;
                 let canonical_sidecar = sidecar_destination.canonicalize()?;
                 if canonical_audio.parent() != Some(output_directory)
-                    || canonical_sidecar.parent() != Some(output_directory)
+                    || canonical_sidecar.parent() != Some(sidecar_directory.as_path())
                 {
                     let _ = fs::remove_file(&canonical_audio);
                     let _ = fs::remove_file(&canonical_sidecar);
@@ -450,6 +453,52 @@ pub fn publish_pair(
     Err(AppError::Conflict(
         "Could not choose an unused output filename".into(),
     ))
+}
+
+pub fn canonical_sidecar_directory(output_directory: &Path) -> AppResult<PathBuf> {
+    let path = output_directory.join(".json");
+    if !path.exists() {
+        fs::create_dir(&path).map_err(|error| {
+            AppError::InvalidInput(format!(
+                "Could not create the .json metadata folder: {error}"
+            ))
+        })?;
+    }
+    let metadata = fs::symlink_metadata(&path)?;
+    if !metadata.is_dir() || metadata.file_type().is_symlink() || is_reparse_point(&metadata) {
+        return Err(invalid(
+            "The output .json path must be a normal metadata folder",
+        ));
+    }
+    let canonical = path.canonicalize()?;
+    if canonical.parent() != Some(output_directory) {
+        return Err(invalid(
+            "The .json metadata folder escaped the output folder",
+        ));
+    }
+    Ok(canonical)
+}
+
+pub fn audio_path_for_sidecar(sidecar_path: &Path) -> AppResult<PathBuf> {
+    let sidecar_name = sidecar_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| invalid("The sidecar filename is invalid"))?;
+    let audio_name = sidecar_name
+        .strip_suffix(".sonic.json")
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| invalid("The sidecar filename is invalid"))?;
+    let parent = sidecar_path
+        .parent()
+        .ok_or_else(|| invalid("The sidecar folder is invalid"))?;
+    let audio_directory = if parent.file_name().and_then(|name| name.to_str()) == Some(".json") {
+        parent
+            .parent()
+            .ok_or_else(|| invalid("The .json sidecar folder is invalid"))?
+    } else {
+        parent
+    };
+    Ok(audio_directory.join(audio_name))
 }
 
 pub fn read_publication_journal(workspace: &Path) -> AppResult<Option<PublicationJournal>> {
@@ -679,7 +728,38 @@ mod tests {
             publish_pair(&job_id, &audio, &sidecar, &workspace, &output, "Beat").unwrap();
         assert_eq!(fs::read(output.join("Beat.mp3")).unwrap(), b"keep");
         assert_eq!(fs::read(published.audio_path).unwrap(), b"new");
+        assert_eq!(
+            published.sidecar_path,
+            output.join(".json").join("Beat (2).mp3.sonic.json")
+        );
+        assert!(output.join(".json").is_dir());
         assert!(safe_cleanup_workspace(&workspace, &output, &job_id));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn resolves_audio_for_nested_and_legacy_sidecars() {
+        assert_eq!(
+            audio_path_for_sidecar(Path::new("C:/Exports/.json/Beat.wav.sonic.json")).unwrap(),
+            PathBuf::from("C:/Exports/Beat.wav")
+        );
+        assert_eq!(
+            audio_path_for_sidecar(Path::new("C:/Exports/Beat.wav.sonic.json")).unwrap(),
+            PathBuf::from("C:/Exports/Beat.wav")
+        );
+        assert!(audio_path_for_sidecar(Path::new("C:/Exports/.json/bad.json")).is_err());
+    }
+
+    #[test]
+    fn refuses_to_replace_a_file_named_json_with_a_folder() {
+        let root = std::env::temp_dir().join(format!("sonic-json-test-{}", Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let output = root.canonicalize().unwrap();
+        fs::write(output.join(".json"), b"keep").unwrap();
+
+        assert!(canonical_sidecar_directory(&output).is_err());
+        assert_eq!(fs::read(output.join(".json")).unwrap(), b"keep");
+
         fs::remove_dir_all(root).unwrap();
     }
 }

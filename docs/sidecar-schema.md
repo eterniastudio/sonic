@@ -1,22 +1,25 @@
 # Sonic metadata sidecar
 
-Every Sonic v0.2 export is paired with `<audio-stem>.sonic.json`. The sidecar
-is the portable producer record; SQLite Library history is an optional local
-index and is not required to understand the file.
+Every Sonic export is paired with `.json/<audio-filename>.sonic.json` inside
+the selected output directory. For example, `Track.wav` is paired with
+`.json/Track.wav.sonic.json`. The sidecar is the portable producer record;
+SQLite Library history is an optional local index and is not required to
+understand the file. Sonic continues to read and import older sidecars stored
+beside their audio.
 
-## Schema version 1
+## Schema version 2
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "sonicVersion": "0.2.3",
   "libraryItemId": "uuid",
   "jobId": "uuid",
   "clientItemId": "optional renderer correlation ID",
   "createdAtMs": 1784419200000,
   "source": {
-    "kind": "youtube | localFile",
-    "sourceFingerprint": "youtube:<provider-id> | sha256:<hex>",
+    "kind": "youtube | soundcloud | localFile",
+    "sourceFingerprint": "youtube:<provider-id> | soundcloud:<provider-id> | sha256:<hex>",
     "providerId": "optional provider ID",
     "canonicalUrl": "optional canonical provider URL",
     "fileName": "optional local basename",
@@ -32,6 +35,14 @@ index and is not required to understand the file.
     "detuneCents": -31.8,
     "tuningHz": 432,
     "evidence": [],
+    "warnings": []
+  },
+  "audioAnalysis": {
+    "sourceSha256": "hex digest of analyzed source audio",
+    "analyzerVersion": "sonic-tempo-1",
+    "analyzedDurationMs": 145000,
+    "bpm": { "primary": 144, "alternates": [72, 288], "confidence": 0.91 },
+    "key": { "primary": "F# minor", "camelot": "11A", "confidence": 0.82 },
     "warnings": []
   },
   "inspectionAudio": {
@@ -73,11 +84,10 @@ optional fields. Readers should ignore unknown fields but reject a
 `schemaVersion` they do not support when using the sidecar for destructive or
 integrity-sensitive operations.
 
-In schema version 1, `metadata.evidence` records matches from declared source
-text or embedded file tags. It does not contain waveform-derived BPM, key, or
-tuning estimates. The `metadata` object stores the producer-reviewed final
-values used for export; a final value may therefore differ from its recorded
-text or tag evidence.
+Schema version 2 records bounded local BPM/key analysis separately from the
+producer-reviewed final metadata. `metadata.evidence` labels audio-derived
+matches with `source: "audioAnalysis"`. Sonic continues to accept schema version
+1, where `audioAnalysis` is absent, and rejects unknown future versions.
 
 ## Privacy
 
@@ -86,7 +96,7 @@ location in sidecar** is enabled in Settings. The basename and SHA-256 source
 fingerprint remain available so the record can identify the input without
 publishing its full directory structure.
 
-YouTube sidecars keep the canonical public video URL and provider ID. Do not
+YouTube and SoundCloud sidecars keep the canonical public URL and provider ID. Do not
 share a sidecar when that URL itself is sensitive.
 
 ## Integrity and deletion

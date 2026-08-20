@@ -1,46 +1,61 @@
-```
-# Dependencies
-node_modules/
-
-# Build outputs
-dist/
-build/
-*.js.map
-*.ts.map
-
-# Environment
-.env
-.env.local
-.env.*
-
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Logs and temp files
+# Logs and temporary files
+logs/
 *.log
 *.tmp
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Python artifacts (if any Python files exist in project)
+# Dependencies and generated output
+node_modules/
+src-tauri/target/
+dist/
+dist-ssr/
+build/
+artifacts/
+coverage/
+htmlcov/
+.coverage
+*.js.map
+*.ts.map
+*.local
+
+# Reproducibly fetched third-party media tools (`npm run tools:fetch`)
+src-tauri/binaries/
+licenses/FFMPEG-LGPL-3.0.txt
+licenses/PYTHON-*.txt
+.cache/
+
+# Python artifacts
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Coverage reports
-coverage/
-htmlcov/
-.coverage
-
-# Distribution / packaging
-*.tar.gz
 *.egg-info/
-pip-log.txt
-pip-delete-this-directory.txt
 
-# OS generated files
+# Local environment
+.env
+.env.local
+.env.*
+
+# Browser and design automation output
+.playwright-cli/
+output/playwright/
+output/design-qa/
+
+# Local agent planning artifacts
+docs/superpowers/
+
+# Editor and OS files
+.vscode/*
+!.vscode/extensions.json
+.idea/
 .DS_Store
 Thumbs.db
-```
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

@@ -123,7 +123,7 @@ describe("queue movement and transitions", () => {
     expect(paused.queuePaused).toBe(true);
     expect(paused.settings.queuePaused).toBe(true);
     expect(paused.jobsById.active.status).toBe("transcoding");
-    expect(paused.announcement).toMatch(/active export will finish/i);
+    expect(paused.announcement).toMatch(/active exports will finish/i);
     expect(setQueuePausedTransition(paused, false).announcement).toBe("Queue resumed.");
   });
 });

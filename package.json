@@ -2,7 +2,7 @@
   "name": "sonic",
   "private": true,
   "version": "0.2.3",
-  "description": "Local-first intake, metadata, export, and library workstation for beat producers",
+  "description": "Download, analyze, export, and split audio from YouTube, SoundCloud, or local files",
   "author": "Eternia Studios",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://github.com/eterniastudio/sonic",

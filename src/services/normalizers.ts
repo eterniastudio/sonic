@@ -1,5 +1,6 @@
 import { BUILTIN_PRESETS, DEFAULT_SETTINGS } from "../domain/defaults";
 import type {
+  AudioAnalysis,
   AudioProperties,
   BootstrapPayload,
   DependencyInfo,
@@ -94,6 +95,9 @@ export function normalizeSource(value: unknown): SourceInput {
   if (kind === "localFile" || raw.path !== undefined || raw.sourcePath !== undefined) {
     return { kind: "localFile", path: asString(raw.path ?? raw.sourcePath) };
   }
+  if (kind === "soundcloud") {
+    return { kind: "soundcloud", url: asString(raw.url ?? raw.sourceUrl ?? raw.webpageUrl) };
+  }
   return { kind: "youtube", url: asString(raw.url ?? raw.sourceUrl ?? raw.webpageUrl) };
 }
 
@@ -110,6 +114,53 @@ function normalizeAudio(value: unknown): AudioProperties {
   };
 }
 
+function normalizeAudioAnalysis(value: unknown): AudioAnalysis | undefined {
+  const raw = asRecord(value);
+  const sourceSha256 = asString(raw.sourceSha256);
+  const analyzerVersion = asString(raw.analyzerVersion);
+  const analyzedDurationMs = asNumber(raw.analyzedDurationMs);
+  if (!/^[a-f0-9]{64}$/i.test(sourceSha256) || !analyzerVersion || analyzedDurationMs === undefined || analyzedDurationMs < 0) {
+    return undefined;
+  }
+  const rawBpm = asRecord(raw.bpm);
+  const primary = asNumber(rawBpm.primary);
+  const confidence = asNumber(rawBpm.confidence);
+  const bpm = Object.keys(rawBpm).length === 0
+    ? undefined
+    : primary !== undefined && primary >= 20 && primary <= 400
+      && confidence !== undefined && confidence >= 0 && confidence <= 1
+      ? {
+          primary,
+          alternates: asArray(rawBpm.alternates)
+            .map(asNumber)
+            .filter((item): item is number => item !== undefined && item >= 20 && item <= 400),
+          confidence,
+        }
+      : null;
+  if (bpm === null) return undefined;
+  const rawKey = asRecord(raw.key);
+  const keyConfidence = asNumber(rawKey.confidence);
+  const key = Object.keys(rawKey).length === 0
+    ? undefined
+    : asOptionalString(rawKey.primary) && asOptionalString(rawKey.camelot)
+      && keyConfidence !== undefined && keyConfidence >= 0 && keyConfidence <= 1
+      ? {
+          primary: asString(rawKey.primary),
+          camelot: asString(rawKey.camelot),
+          confidence: keyConfidence,
+        }
+      : null;
+  if (key === null) return undefined;
+  return {
+    sourceSha256,
+    analyzerVersion,
+    analyzedDurationMs,
+    bpm,
+    key,
+    warnings: asArray(raw.warnings).map((item) => asString(item)).filter(Boolean),
+  };
+}
+
 export function normalizeInspection(value: unknown, fallbackSource?: SourceInput): SourceInspection {
   const raw = asRecord(value);
   const source = raw.source ? normalizeSource(raw.source) : fallbackSource ?? normalizeSource(raw);
@@ -121,7 +172,7 @@ export function normalizeInspection(value: unknown, fallbackSource?: SourceInput
   const audio = normalizeAudio(raw.audio);
   const durationSeconds = asNumber(raw.durationSeconds ?? raw.duration)
     ?? (audio.durationMs !== undefined ? audio.durationMs / 1_000 : undefined);
-  const sourceUrl = asOptionalString(raw.webpageUrl ?? raw.sourceUrl) ?? (source.kind === "youtube" ? source.url : undefined);
+  const sourceUrl = asOptionalString(raw.webpageUrl ?? raw.sourceUrl) ?? (source.kind !== "localFile" ? source.url : undefined);
   const sourcePath = asOptionalString(raw.sourcePath ?? raw.path) ?? (source.kind === "localFile" ? source.path : undefined);
   const title = asString(
     raw.title ?? raw.displayTitle,
@@ -139,7 +190,7 @@ export function normalizeInspection(value: unknown, fallbackSource?: SourceInput
     thumbnailUrl: asOptionalString(raw.thumbnailUrl ?? raw.artworkUrl),
     sourceUrl,
     sourcePath,
-    sourceLabel: asString(raw.sourceLabel, source.kind === "youtube" ? "YouTube" : "Local file"),
+    sourceLabel: asString(raw.sourceLabel, source.kind === "youtube" ? "YouTube" : source.kind === "soundcloud" ? "SoundCloud" : "Local file"),
     isLive: asBoolean(raw.isLive),
     fileSizeBytes: audio.fileSizeBytes ?? asNumber(raw.fileSizeBytes ?? raw.fileSize),
     codec: audio.codec ?? asOptionalString(raw.codec ?? raw.audioCodec),
@@ -147,6 +198,7 @@ export function normalizeInspection(value: unknown, fallbackSource?: SourceInput
     declaredMetadata,
     embeddedMetadata,
     suggestedMetadata,
+    audioAnalysis: raw.audioAnalysis ? normalizeAudioAnalysis(raw.audioAnalysis) : undefined,
     warnings: asArray(raw.warnings).map((item) => asString(item)).filter(Boolean),
     metadata: suggestedMetadata,
   };
@@ -248,7 +300,7 @@ export function normalizeLibraryItem(value: unknown): LibraryItem {
     title: asString(raw.title, "Untitled export"),
     creator: asOptionalString(raw.artist ?? raw.creator ?? raw.producer),
     source,
-    sourceLabel: asString(raw.sourceLabel, source.kind === "youtube" ? "YouTube" : "Local file"),
+    sourceLabel: asString(raw.sourceLabel, source.kind === "youtube" ? "YouTube" : source.kind === "soundcloud" ? "SoundCloud" : "Local file"),
     thumbnailUrl: asOptionalString(raw.thumbnailUrl ?? raw.artworkUrl),
     outputPath: asString(raw.audioPath ?? raw.outputPath ?? raw.path),
     format: asString(raw.format ?? raw.extension, "audio"),

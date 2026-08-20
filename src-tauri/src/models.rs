@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::metadata::MusicMetadata;
+use crate::{audio_analysis::AudioAnalysis, metadata::MusicMetadata};
 
 pub const JOB_UPDATED_EVENT: &str = "sonic://job-updated";
 pub const QUEUE_UPDATED_EVENT: &str = "sonic://queue-updated";
@@ -10,6 +10,7 @@ pub const LEGACY_PROGRESS_EVENT: &str = "sonic://download-progress";
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum SourceSpec {
     Youtube { url: String },
+    Soundcloud { url: String },
     LocalFile { path: String },
 }
 
@@ -40,9 +41,10 @@ pub struct SourceInspection {
     pub audio: AudioProperties,
     pub declared_metadata: MusicMetadata,
     pub embedded_metadata: MusicMetadata,
-    /// Evidence-ranked merge of declared text and embedded tags only.
-    /// Sonic v0.2 does not derive these values from the audio signal.
+    /// Evidence-ranked merge of declared text, embedded tags, and qualified analysis.
     pub suggested_metadata: MusicMetadata,
+    #[serde(default)]
+    pub audio_analysis: Option<AudioAnalysis>,
     pub warnings: Vec<String>,
 }
 
@@ -440,29 +442,6 @@ pub enum LibrarySort {
 }
 
 impl LibrarySort {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Newest => "newest",
-            Self::Oldest => "oldest",
-            Self::Title => "title",
-            Self::Bpm => "bpm",
-            Self::Artist => "artist",
-            Self::Format => "format",
-        }
-    }
-
-    pub fn from_db(value: &str) -> Option<Self> {
-        Some(match value {
-            "newest" | "" => Self::Newest,
-            "oldest" => Self::Oldest,
-            "title" => Self::Title,
-            "bpm" => Self::Bpm,
-            "artist" => Self::Artist,
-            "format" => Self::Format,
-            _ => return None,
-        })
-    }
-
     pub fn sql_order(&self) -> &'static str {
         match self {
             Self::Newest => "created_at_ms DESC, id DESC",
@@ -728,18 +707,6 @@ pub struct LibraryRoot {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LibraryItemLocation {
-    pub id: String,
-    pub item_id: String,
-    pub root_id: String,
-    pub relative_audio_path: String,
-    pub relative_sidecar_path: String,
-    pub created_at_ms: i64,
-    pub updated_at_ms: i64,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Tag {
     pub id: String,
     pub name: String,
@@ -776,21 +743,6 @@ pub struct UpdateLibraryRootRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RelinkLibraryRootRequest {
-    pub id: String,
-    pub new_root_path: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ImportSidecarFolderRequest {
-    pub folder_path: String,
-    #[serde(default)]
-    pub recursive: bool,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SidecarImportReport {
     pub scanned_count: u64,
     pub imported_count: u64,
@@ -810,13 +762,6 @@ pub struct SidecarImportError {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BulkTagRequest {
-    pub item_ids: Vec<String>,
-    pub tag_ids: Vec<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BulkRemoveTagRequest {
     pub item_ids: Vec<String>,
     pub tag_ids: Vec<String>,
 }
@@ -856,14 +801,6 @@ pub struct CreateTagRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UpdateTagRequest {
-    pub id: String,
-    pub name: Option<String>,
-    pub color: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct CreateCollectionRequest {
     pub name: String,
     pub description: Option<String>,
@@ -898,9 +835,10 @@ pub struct RemoveFromCollectionRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DuplicateGroup {
-    pub sha256: String,
+    pub group_type: String,
+    pub fingerprint: String,
     pub item_ids: Vec<String>,
-    pub detected_at_ms: i64,
+    pub count: u64,
 }
 
 #[cfg(test)]
