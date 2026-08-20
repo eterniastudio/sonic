@@ -1,7 +1,7 @@
 {
   "name": "sonic",
   "private": true,
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Download, analyze, export, and split audio from YouTube, SoundCloud, or local files",
   "author": "Eternia Studios",
   "license": "SEE LICENSE IN LICENSE",
