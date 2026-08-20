@@ -3,6 +3,7 @@ mod commands;
 mod error;
 mod filesystem;
 mod jobs;
+mod media_retry;
 mod metadata;
 mod models;
 mod presets;

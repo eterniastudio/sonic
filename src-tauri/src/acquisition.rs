@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::{
     error::{invalid, AppError, AppResult},
     filesystem::{canonical_local_audio, external_path_string},
+    media_retry::{format_exhausted_error, run_with_retry, sleep, RetryPolicy},
     metadata::{self, MusicMetadata},
     models::{AppSettings, AudioProperties, SourceInspection, SourceSpec},
     tools::{
@@ -117,21 +118,49 @@ async fn inspect_youtube(
         "--".to_string(),
         url,
     ];
-    let output = yt_dlp_command(app)?
-        .args(args)
-        .output()
-        .await
-        .map_err(|error| AppError::Process(format!("Could not inspect the video: {error}")))?;
-    if !output.status.success() {
-        let message = limited_text(&String::from_utf8_lossy(&output.stderr));
-        return Err(AppError::Process(if message.is_empty() {
-            "yt-dlp could not inspect this video".into()
+    let policy = RetryPolicy::default();
+    let raw = run_with_retry(
+        policy,
+        |_| {
+            let args = args.clone();
+            async move {
+                let output = yt_dlp_command(app)?
+                    .args(args)
+                    .output()
+                    .await
+                    .map_err(|error| {
+                        AppError::Process(format!("Could not inspect the video: {error}"))
+                    })?;
+                if !output.status.success() {
+                    let message = limited_text(&String::from_utf8_lossy(&output.stderr));
+                    return Err(AppError::Process(if message.is_empty() {
+                        "yt-dlp returned empty metadata".into()
+                    } else {
+                        message
+                    }));
+                }
+                if output.stdout.is_empty() {
+                    return Err(AppError::Process("yt-dlp returned empty metadata".into()));
+                }
+                serde_json::from_slice::<YtDlpVideoInfo>(&output.stdout).map_err(|error| {
+                    AppError::Process(format!("yt-dlp returned invalid metadata: {error}"))
+                })
+            }
+        },
+        sleep,
+    )
+    .await
+    .map_err(|failure| {
+        if failure.attempts == policy.max_attempts {
+            AppError::Process(format_exhausted_error(
+                "source inspection",
+                failure.attempts,
+                &failure.error.public_message(),
+            ))
         } else {
-            message
-        }));
-    }
-    let raw: YtDlpVideoInfo = serde_json::from_slice(&output.stdout)
-        .map_err(|error| AppError::Process(format!("yt-dlp returned invalid metadata: {error}")))?;
+            failure.error
+        }
+    })?;
     let id = raw
         .id
         .filter(|id| valid_youtube_id(id))

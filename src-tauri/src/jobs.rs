@@ -20,6 +20,7 @@ use crate::{
         external_path_string, prepare_workspace, preset_extension, publish_pair,
         read_publication_journal, render_filename, safe_cleanup_workspace,
     },
+    media_retry::{format_exhausted_error, run_with_retry, sleep, RetryPolicy},
     models::{
         AppSettings, DownloadProgress, EnqueueItem, ExportPresetId, JobProgress, JobState,
         LibraryItem, QueueJob, RecoveryReport, SettingsPatch, SourceSpec, JOB_UPDATED_EVENT,
@@ -534,16 +535,51 @@ async fn acquire_youtube(
         "--".to_string(),
         url,
     ];
-    let result = run_process(
-        app,
-        repository,
-        job_id,
-        active,
-        yt_dlp_command(app)?,
-        args,
-        ProcessKind::YtDlp,
+    let policy = RetryPolicy::default();
+    let result = run_with_retry(
+        policy,
+        |attempt| {
+            let args = args.clone();
+            async move {
+                ensure_not_cancelled(active)?;
+                if attempt > 1 {
+                    let progress = JobProgress {
+                        message: Some(format!(
+                            "Retrying source audio (attempt {attempt} of {})",
+                            policy.max_attempts
+                        )),
+                        ..Default::default()
+                    };
+                    if let Ok(job) = repository.update_progress(job_id, &progress) {
+                        emit_job(app, repository, &job);
+                    }
+                }
+                run_process(
+                    app,
+                    repository,
+                    job_id,
+                    active,
+                    yt_dlp_command(app)?,
+                    args,
+                    ProcessKind::YtDlp,
+                )
+                .await
+            }
+        },
+        sleep,
     )
-    .await?;
+    .await
+    .map_err(|failure| {
+        if failure.attempts == policy.max_attempts {
+            AppError::Process(format_exhausted_error(
+                "source acquisition",
+                failure.attempts,
+                &failure.error.public_message(),
+            ))
+        } else {
+            failure.error
+        }
+    })?;
     if let Some(path) = result.reported_output {
         if let Some(path) = validated_workspace_file(Path::new(&path), workspace) {
             return Ok(path);
