@@ -1,4 +1,4 @@
-import { useState, type DragEvent, type FormEvent } from "react";
+import { useLayoutEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { ClipboardText, FileAudio, LinkSimple, Plus } from "@phosphor-icons/react";
 import { useSonic } from "../../app/SonicProvider";
 
@@ -6,6 +6,14 @@ export function SourceComposer() {
   const { addUrls, importFiles, addLocalPaths, bridgeMode, setDropActive } = useSonic();
   const [value, setValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = "0px";
+    input.style.height = `${Math.min(96, Math.max(28, input.scrollHeight))}px`;
+  }, [value]);
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
@@ -56,8 +64,9 @@ export function SourceComposer() {
       </div>
       <form className="composer-input" onSubmit={(event) => void submit(event)}>
         <LinkSimple size={20} aria-hidden="true" />
-        <label className="sr-only" htmlFor="source-links">YouTube links, one per line</label>
+        <label className="sr-only" htmlFor="source-links">YouTube or SoundCloud links, one per line</label>
         <textarea
+          ref={inputRef}
           id="source-links"
           rows={1}
           value={value}
@@ -65,7 +74,7 @@ export function SourceComposer() {
           onKeyDown={(event) => {
             if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) void submit();
           }}
-          placeholder="Paste YouTube links — one per line"
+          placeholder="Paste YouTube or SoundCloud links — one per line"
         />
         <button className="icon-button" type="button" onClick={() => void paste()} aria-label="Paste links from clipboard" title="Paste links">
           <ClipboardText size={19} aria-hidden="true" />

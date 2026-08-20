@@ -1,6 +1,4 @@
 import {
-  ArrowDown,
-  ArrowUp,
   Check,
   CircleNotch,
   FileAudio,
@@ -108,7 +106,7 @@ export function QueueList() {
                   <span className="queue-main">
                     <span className="queue-title">{item.inspection?.title ?? (item.source.kind === "localFile" ? item.source.path.split(/[\\/]/).pop() : "Reading link")}</span>
                     <span className="queue-subtitle">
-                      {item.inspection?.creator ?? item.inspection?.sourceLabel ?? (item.source.kind === "youtube" ? "YouTube" : "Local file")}
+                      {item.inspection?.creator ?? item.inspection?.sourceLabel ?? (item.source.kind === "youtube" ? "YouTube" : item.source.kind === "soundcloud" ? "SoundCloud" : "Local file")}
                     </span>
                   </span>
                   <span className="queue-metadata" aria-label="Musical metadata">
@@ -139,10 +137,10 @@ export function QueueList() {
                   </span>
                   <div className="row-actions">
                     <button type="button" disabled={index === 0 || !reorderable} onClick={() => void moveItem(item.id, -1)} aria-label={`Move ${item.inspection?.title ?? "item"} up`}>
-                      <ArrowUp size={14} aria-hidden="true" />
+                      <span aria-hidden="true">↑</span>
                     </button>
                     <button type="button" disabled={index === jobs.length - 1 || !reorderable} onClick={() => void moveItem(item.id, 1)} aria-label={`Move ${item.inspection?.title ?? "item"} down`}>
-                      <ArrowDown size={14} aria-hidden="true" />
+                      <span aria-hidden="true">↓</span>
                     </button>
                     {cancellable ? (
                       <button type="button" onClick={() => void cancelItem(item.id)} aria-label={`Cancel ${item.inspection?.title ?? "export"}`}><Stop size={14} weight="fill" aria-hidden="true" /></button>

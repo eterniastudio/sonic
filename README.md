@@ -42,7 +42,7 @@ remember where it went” routine with one focused desktop workspace.
 
 | Intake | Verify | Export | Organize |
 | --- | --- | --- | --- |
-| Add authorized YouTube links or drop local audio. | Compare source text, embedded tags, parsed suggestions, and your final values. | Choose a fixed producer-ready recipe and safe filename. | Search, audition, reveal, and re-export from the local Beat Library. |
+| Add authorized YouTube or SoundCloud links, or drop local audio. | Compare source text, embedded tags, local audio analysis, and your final values. | Choose a producer-ready export or create four local stems. | Search, audition, reveal, and re-export from the local Beat Library. |
 
 No Sonic account. No subscription. No analytics. No hosted conversion
 backend. Your queue, metadata decisions, exports, and library stay on your
@@ -122,11 +122,10 @@ key formats; alternate and half/double-time tempos; detune in cents,
 semitones, half-steps, or directional language; source evidence; text/tag
 match strength; and conflict warnings.
 
-> [!CAUTION]
-> Sonic v0.2 does **not** derive BPM, key, or tuning from the audio signal. It
-> parses declared text and embedded metadata, then asks the producer to verify
-> or correct the final values. Audio-derived analysis is a future boundary,
-> not a current marketing claim.
+> [!NOTE]
+> Sonic analyzes BPM and musical key locally from a bounded audio window. A
+> sufficiently confident estimate fills only a blank field; producer edits and
+> declared/embedded values are never overwritten. Tuning remains text/tag only.
 
 ## Built for producer workflows
 

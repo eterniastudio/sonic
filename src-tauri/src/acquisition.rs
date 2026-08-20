@@ -6,6 +6,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{
+    audio_analysis::{analyze_audio, apply_to_music_metadata},
     error::{invalid, AppError, AppResult},
     filesystem::{canonical_local_audio, external_path_string},
     media_retry::{format_exhausted_error, run_with_retry, sleep, RetryPolicy},
@@ -39,6 +40,12 @@ struct YtDlpVideoInfo {
     acodec: Option<String>,
     asr: Option<u32>,
     audio_channels: Option<u16>,
+}
+
+#[derive(Clone, Copy)]
+enum RemoteProvider {
+    Youtube,
+    Soundcloud,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -82,7 +89,12 @@ pub async fn inspect_source(
     settings: &AppSettings,
 ) -> AppResult<SourceInspection> {
     match source {
-        SourceSpec::Youtube { url } => inspect_youtube(app, &url, settings).await,
+        SourceSpec::Youtube { url } => {
+            inspect_remote(app, &url, settings, RemoteProvider::Youtube).await
+        }
+        SourceSpec::Soundcloud { url } => {
+            inspect_remote(app, &url, settings, RemoteProvider::Soundcloud).await
+        }
         SourceSpec::LocalFile { path } => {
             let app = app.clone();
             let settings = settings.clone();
@@ -93,12 +105,16 @@ pub async fn inspect_source(
     }
 }
 
-async fn inspect_youtube(
+async fn inspect_remote(
     app: &AppHandle,
     input: &str,
     settings: &AppSettings,
+    provider: RemoteProvider,
 ) -> AppResult<SourceInspection> {
-    let url = validate_youtube_url(input)?;
+    let url = match provider {
+        RemoteProvider::Youtube => validate_youtube_url(input)?,
+        RemoteProvider::Soundcloud => validate_soundcloud_url(input)?,
+    };
     let js_runtime = bundled_js_runtime(app)?;
     let args = vec![
         "--ignore-config".to_string(),
@@ -116,7 +132,7 @@ async fn inspect_youtube(
         "--dump-single-json".to_string(),
         "--no-warnings".to_string(),
         "--".to_string(),
-        url,
+        url.clone(),
     ];
     let policy = RetryPolicy::default();
     let raw = run_with_retry(
@@ -161,10 +177,9 @@ async fn inspect_youtube(
             failure.error
         }
     })?;
-    let id = raw
-        .id
-        .filter(|id| valid_youtube_id(id))
-        .ok_or_else(|| AppError::Process("The video metadata did not include a valid ID".into()))?;
+    let id = raw.id.filter(|id| valid_remote_id(id)).ok_or_else(|| {
+        AppError::Process("The source metadata did not include a valid ID".into())
+    })?;
     let title = bounded_text(
         raw.title.or(raw.fulltitle).as_deref().unwrap_or(""),
         MAX_TITLE_CHARACTERS,
@@ -189,7 +204,23 @@ async fn inspect_youtube(
         ));
     }
     let metadata = metadata::parse_music_metadata(&title, &description);
-    let canonical_url = format!("https://www.youtube.com/watch?v={id}");
+    let (source, source_fingerprint, canonical_url) = match provider {
+        RemoteProvider::Youtube => {
+            let canonical = format!("https://www.youtube.com/watch?v={id}");
+            (
+                SourceSpec::Youtube {
+                    url: canonical.clone(),
+                },
+                format!("youtube:{id}"),
+                canonical,
+            )
+        }
+        RemoteProvider::Soundcloud => (
+            SourceSpec::Soundcloud { url: url.clone() },
+            format!("soundcloud:{id}"),
+            url,
+        ),
+    };
     let audio = AudioProperties {
         container: raw.ext,
         codec: raw.acodec,
@@ -201,10 +232,8 @@ async fn inspect_youtube(
     };
     Ok(SourceInspection {
         id: id.clone(),
-        source: SourceSpec::Youtube {
-            url: canonical_url.clone(),
-        },
-        source_fingerprint: format!("youtube:{id}"),
+        source,
+        source_fingerprint,
         title,
         artist: raw
             .uploader
@@ -218,6 +247,7 @@ async fn inspect_youtube(
         declared_metadata: metadata.clone(),
         embedded_metadata: MusicMetadata::default(),
         suggested_metadata: metadata,
+        audio_analysis: None,
         warnings: Vec::new(),
     })
 }
@@ -252,7 +282,21 @@ pub fn inspect_local(
         .join("\n");
     let declared_metadata = metadata::parse_music_metadata(&filename, "");
     let embedded_metadata = metadata::parse_music_metadata(&title, &tag_text);
-    let suggested_metadata = merge_metadata(&embedded_metadata, &declared_metadata);
+    let mut suggested_metadata = merge_metadata(&embedded_metadata, &declared_metadata);
+    let (audio_analysis, warnings) = match analyze_audio(app, &path, fingerprint.clone()) {
+        Ok(analysis) => {
+            apply_to_music_metadata(&mut suggested_metadata, &analysis);
+            let warnings = analysis.warnings.clone();
+            (Some(analysis), warnings)
+        }
+        Err(error) => (
+            None,
+            vec![format!(
+                "Tempo analysis was skipped: {}",
+                error.public_message()
+            )],
+        ),
+    };
     let source_path = external_path_string(&path)?;
     Ok(SourceInspection {
         id: Uuid::new_v4().to_string(),
@@ -272,7 +316,8 @@ pub fn inspect_local(
         declared_metadata,
         embedded_metadata,
         suggested_metadata,
-        warnings: Vec::new(),
+        audio_analysis,
+        warnings,
     })
 }
 
@@ -405,9 +450,44 @@ pub fn validate_youtube_url(input: &str) -> AppResult<String> {
     Ok(parsed.to_string())
 }
 
+pub fn validate_soundcloud_url(input: &str) -> AppResult<String> {
+    let input = input.trim();
+    if input.is_empty() || input.len() > MAX_URL_LENGTH {
+        return Err(invalid("Enter a valid SoundCloud track URL"));
+    }
+    let parsed = Url::parse(input).map_err(|_| invalid("Enter a valid SoundCloud track URL"))?;
+    if parsed.scheme() != "https" || !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(invalid("Only secure SoundCloud track URLs are supported"));
+    }
+    let host = parsed
+        .host_str()
+        .map(str::to_ascii_lowercase)
+        .ok_or_else(|| invalid("Enter a valid SoundCloud track URL"))?;
+    let allowed_host = matches!(
+        host.as_str(),
+        "soundcloud.com" | "www.soundcloud.com" | "m.soundcloud.com" | "on.soundcloud.com"
+    );
+    let segment_count = parsed
+        .path_segments()
+        .map(|segments| segments.filter(|segment| !segment.is_empty()).count())
+        .unwrap_or_default();
+    if !allowed_host || segment_count == 0 {
+        return Err(invalid("Enter a direct SoundCloud track URL"));
+    }
+    Ok(parsed.to_string())
+}
+
 fn valid_youtube_id(value: &str) -> bool {
     let length = value.len();
     (6..=64).contains(&length)
+        && value
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+}
+
+fn valid_remote_id(value: &str) -> bool {
+    let length = value.len();
+    (1..=128).contains(&length)
         && value
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
@@ -456,7 +536,7 @@ fn validate_thumbnail_url(value: String) -> Option<String> {
     let parsed = Url::parse(&value).ok()?;
     (parsed.scheme() == "https"
         && parsed.host_str().is_some_and(|host| {
-            ["ytimg.com", "ggpht.com"]
+            ["ytimg.com", "ggpht.com", "sndcdn.com", "soundcloud.com"]
                 .iter()
                 .any(|domain| host == *domain || host.ends_with(&format!(".{domain}")))
         }))
@@ -496,6 +576,14 @@ mod tests {
         assert!(validate_youtube_url("https://youtube.com/playlist?list=abc").is_err());
         assert!(validate_youtube_url("https://example.com/watch?v=dQw4w9WgXcQ").is_err());
         assert!(validate_youtube_url("http://youtube.com/watch?v=dQw4w9WgXcQ").is_err());
+    }
+
+    #[test]
+    fn validates_only_direct_soundcloud_urls() {
+        assert!(validate_soundcloud_url("https://soundcloud.com/artist/track").is_ok());
+        assert!(validate_soundcloud_url("https://on.soundcloud.com/abc123").is_ok());
+        assert!(validate_soundcloud_url("https://example.com/artist/track").is_err());
+        assert!(validate_soundcloud_url("http://soundcloud.com/artist/track").is_err());
     }
 
     #[test]

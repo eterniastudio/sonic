@@ -11,6 +11,7 @@ use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
 use crate::{
+    audio_analysis::{apply_to_final_metadata, apply_to_music_metadata, AudioAnalysis},
     error::{conflict, invalid, not_found, AppError, AppResult},
     filesystem::external_path_string,
     models::{
@@ -727,6 +728,48 @@ impl Repository {
         self.job(id)
     }
 
+    pub fn apply_audio_analysis(
+        &self,
+        id: &str,
+        expected_revision: i64,
+        analysis: &AudioAnalysis,
+    ) -> AppResult<JobDetail> {
+        let mut connection = self.lock()?;
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let request_json: String = transaction
+            .query_row(
+                "SELECT request_json FROM jobs WHERE id=?1 AND revision=?2
+                 AND state NOT IN ('completed','failed','cancelled','interrupted')",
+                params![id, expected_revision],
+                |row| row.get(0),
+            )
+            .optional()?
+            .ok_or_else(|| conflict("The job changed before tempo analysis could be applied"))?;
+        let mut request: EnqueueItem = serde_json::from_str(&request_json)?;
+        request.inspection.audio_analysis = Some(analysis.clone());
+        apply_to_music_metadata(&mut request.inspection.suggested_metadata, analysis);
+        apply_to_final_metadata(&mut request.metadata, analysis);
+        let changed = transaction.execute(
+            "UPDATE jobs SET request_json=?1,revision=revision+1,updated_at_ms=?2
+             WHERE id=?3 AND revision=?4",
+            params![
+                serde_json::to_string(&request)?,
+                now_ms(),
+                id,
+                expected_revision
+            ],
+        )?;
+        if changed != 1 {
+            return Err(conflict(
+                "The job changed before tempo analysis could be applied",
+            ));
+        }
+        let detail =
+            transaction.query_row("SELECT * FROM jobs WHERE id=?1", [id], row_to_job_detail)?;
+        transaction.commit()?;
+        Ok(detail)
+    }
+
     pub fn running_jobs_for_recovery(&self) -> AppResult<Vec<JobDetail>> {
         let connection = self.lock()?;
         let mut statement = connection.prepare(
@@ -780,6 +823,43 @@ impl Repository {
                 item.missing,
                 item.created_at_ms,
                 item.updated_at_ms
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn insert_audio_analysis(&self, item_id: &str, analysis: &AudioAnalysis) -> AppResult<()> {
+        let tempo = analysis.bpm.as_ref();
+        let key = analysis.key.as_ref();
+        self.lock()?.execute(
+            "INSERT INTO audio_analysis(
+               id,item_id,source_sha256,analyzer_version,analyzed_at_ms,bpm_primary,
+               bpm_alternates_json,bpm_confidence,key_primary,key_camelot,key_confidence,created_at_ms
+             ) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?5)
+             ON CONFLICT(item_id) DO UPDATE SET
+               source_sha256=excluded.source_sha256,
+               analyzer_version=excluded.analyzer_version,
+               analyzed_at_ms=excluded.analyzed_at_ms,
+               bpm_primary=excluded.bpm_primary,
+               bpm_alternates_json=excluded.bpm_alternates_json,
+               bpm_confidence=excluded.bpm_confidence,
+               key_primary=excluded.key_primary,
+               key_camelot=excluded.key_camelot,
+               key_confidence=excluded.key_confidence",
+            params![
+                Uuid::new_v4().to_string(),
+                item_id,
+                analysis.source_sha256,
+                analysis.analyzer_version,
+                now_ms(),
+                tempo.map(|value| value.primary),
+                tempo
+                    .map(|value| serde_json::to_string(&value.alternates))
+                    .transpose()?,
+                tempo.map(|value| value.confidence),
+                key.map(|value| value.primary.as_str()),
+                key.map(|value| value.camelot.as_str()),
+                key.map(|value| value.confidence),
             ],
         )?;
         Ok(())
@@ -1605,6 +1685,9 @@ impl Repository {
             "youtube" => SourceSpec::Youtube {
                 url: sidecar.source.canonical_url.clone().unwrap_or_default(),
             },
+            "soundcloud" => SourceSpec::Soundcloud {
+                url: sidecar.source.canonical_url.clone().unwrap_or_default(),
+            },
             "localFile" => SourceSpec::LocalFile {
                 path: sidecar
                     .source
@@ -1633,6 +1716,7 @@ impl Repository {
                 declared_metadata: crate::metadata::MusicMetadata::default(),
                 embedded_metadata: crate::metadata::MusicMetadata::default(),
                 suggested_metadata: crate::metadata::MusicMetadata::default(),
+                audio_analysis: sidecar.audio_analysis.clone(),
                 warnings: vec![],
             },
             metadata: sidecar.metadata.clone(),
@@ -1944,6 +2028,7 @@ mod tests {
                 declared_metadata: MusicMetadata::default(),
                 embedded_metadata: MusicMetadata::default(),
                 suggested_metadata: MusicMetadata::default(),
+                audio_analysis: None,
                 warnings: vec![],
             },
             metadata: FinalMetadata {
@@ -1996,6 +2081,51 @@ mod tests {
             .unwrap();
         assert_eq!(retried.state, JobState::Queued);
         assert_eq!(retried.attempt, 1);
+        drop(repository);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn apply_detected_bpm_is_revision_safe_and_preserves_manual_values() {
+        use crate::audio_analysis::{AudioAnalysis, TempoEstimate, ANALYZER_VERSION};
+
+        let (repository, root) = repository();
+        let analysis = AudioAnalysis {
+            source_sha256: "a".repeat(64),
+            analyzer_version: ANALYZER_VERSION.into(),
+            analyzed_duration_ms: 30_000,
+            bpm: Some(TempoEstimate {
+                primary: 128.0,
+                alternates: vec![64.0, 256.0],
+                confidence: 0.9,
+            }),
+            key: None,
+            warnings: vec![],
+        };
+
+        let blank_job = repository.insert_job(&request("blank-analysis")).unwrap();
+        let claimed = repository.claim_next_job().unwrap().unwrap();
+        assert!(repository
+            .apply_audio_analysis(&blank_job.id, blank_job.revision, &analysis)
+            .is_err());
+        let applied = repository
+            .apply_audio_analysis(&blank_job.id, claimed.summary.revision, &analysis)
+            .unwrap();
+        assert_eq!(applied.request.metadata.bpm, Some(128.0));
+        assert!(applied.request.inspection.audio_analysis.is_some());
+
+        repository
+            .fail_job(&blank_job.id, "test", "advance queue")
+            .unwrap();
+        let mut manual_request = request("manual-analysis");
+        manual_request.metadata.bpm = Some(140.0);
+        repository.insert_job(&manual_request).unwrap();
+        let manual = repository.claim_next_job().unwrap().unwrap();
+        let applied = repository
+            .apply_audio_analysis(&manual.summary.id, manual.summary.revision, &analysis)
+            .unwrap();
+        assert_eq!(applied.request.metadata.bpm, Some(140.0));
+
         drop(repository);
         fs::remove_dir_all(root).unwrap();
     }
@@ -2212,6 +2342,7 @@ mod tests {
                 title: "Imported beat".into(),
                 ..Default::default()
             },
+            audio_analysis: None,
             inspection_audio: AudioProperties::default(),
             output_audio: AudioProperties {
                 container: Some("wav".into()),

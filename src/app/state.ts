@@ -51,8 +51,8 @@ export type SonicState = {
   libraryRoots: LibraryRoot[];
   tags: Tag[];
   collections: Collection[];
-  selectedTagIds: number[];
-  selectedCollectionId: number | null;
+  selectedTagIds: string[];
+  selectedCollectionId: string | null;
 };
 
 const EMPTY_DIAGNOSTICS: Diagnostics = {
@@ -188,8 +188,8 @@ export type SonicAction =
   | { type: "setLibraryRoots"; roots: LibraryRoot[] }
   | { type: "setTags"; tags: Tag[] }
   | { type: "setCollections"; collections: Collection[] }
-  | { type: "toggleTagSelection"; tagId: number }
-  | { type: "selectCollection"; collectionId: number | null };
+  | { type: "toggleTagSelection"; tagId: string }
+  | { type: "selectCollection"; collectionId: string | null };
 
 export function sonicReducer(state: SonicState, action: SonicAction): SonicState {
   switch (action.type) {

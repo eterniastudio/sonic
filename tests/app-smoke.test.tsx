@@ -14,6 +14,7 @@ vi.mock("../src/services/bridge", async () => {
 describe("Sonic application shell", () => {
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem("sonic:tutorial-complete", "1");
   });
 
   it("renders a usable local-first workspace in browser preview mode", async () => {
@@ -23,8 +24,7 @@ describe("Sonic application shell", () => {
     expect(screen.getByRole("main")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^ready$/i })).toBeInTheDocument();
     expect(screen.getAllByText(/audio signal/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/not analyzed in v0\.2/i)).toBeInTheDocument();
-    expect(screen.getByText(/does not analyze the audio signal/i)).toBeInTheDocument();
+    expect(screen.getByText(/tempo analysis runs locally/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /confirm metadata & add to queue/i })).toBeInTheDocument();
     expect(screen.queryByText(/^\d+% match confidence$/i)).not.toBeInTheDocument();
 
@@ -51,12 +51,26 @@ describe("Sonic application shell", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const input = await screen.findByRole("textbox", { name: /youtube links/i });
+    const input = await screen.findByRole("textbox", { name: /youtube or soundcloud links/i });
     await user.type(input, "https://www.youtube.com/watch?v=fixtureABCD");
     await user.click(screen.getByRole("button", { name: /add links/i }));
 
     expect(await screen.findByRole("heading", { name: /night shift.*abcd/i }, { timeout: 3_000 }))
       .toBeInTheDocument();
+  });
+
+  it("offers the walkthrough on first boot and opens the command palette from the keyboard", async () => {
+    localStorage.removeItem("sonic:tutorial-complete");
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: /bring in the track/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^skip$/i }));
+    expect(localStorage.getItem("sonic:tutorial-complete")).toBe("1");
+
+    await user.keyboard("{Control>}k{/Control}");
+    expect(screen.getByRole("heading", { name: /go to a sonic action/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open library/i })).toBeInTheDocument();
   });
 
   it("cancels a queued native job instead of offering an invalid remove action", async () => {

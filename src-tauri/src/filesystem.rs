@@ -265,6 +265,7 @@ fn template_value(
             .unwrap_or_default(),
         "source" => match source {
             Some(SourceSpec::Youtube { .. }) => "YouTube".to_string(),
+            Some(SourceSpec::Soundcloud { .. }) => "SoundCloud".to_string(),
             Some(SourceSpec::LocalFile { .. }) => "Local".to_string(),
             None => String::new(),
         },

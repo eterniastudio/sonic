@@ -1,62 +1,46 @@
 # Metadata claims boundary
 
-This document defines what Sonic v0.2 does today and the product rules that
-apply if audio-derived estimates are added later. It is a claims boundary, not
-a promise that waveform analysis exists in the current release.
+This document defines what Sonic derives today and which values remain
+producer-authoritative.
 
-## Sonic v0.2
-
-Sonic v0.2 uses four distinct metadata concepts:
+## Evidence layers
 
 | Concept | Meaning |
 | --- | --- |
-| Declared | BPM, key, or tuning written in a YouTube title or description, or in a local filename. |
+| Declared | BPM, key, or tuning written in remote-source text or a local filename. |
 | Embedded | Values stored in supported audio-container tags and read through ffprobe. |
-| Suggested | Sonic's rule-based parsing, ranking, and merge of declared text and embedded tags. |
-| Final | The producer-editable values used for naming, tagging, sidecars, and export. |
+| Audio analysis | Local, bounded BPM and musical-key estimates with per-field confidence. |
+| Suggested | The precedence merge presented to the producer. |
+| Final | Producer-editable values used for naming, tagging, sidecars, and export. |
 
-`MusicMetadata.confidence` is the strength of a deterministic text or tag
-pattern match. It is not model confidence, acoustic confidence, or evidence
-that the value agrees with the waveform.
+`MusicMetadata.confidence` describes evidence strength. `AudioAnalysis` keeps
+its BPM and key confidence separate and records the analyzed duration, source
+hash, analyzer version, and warnings.
 
-Sonic reads technical audio properties such as codec, sample rate, channel
-count, bit depth, duration, and file size. The preview transport also renders
-bounded amplitude peaks for its waveform display. Neither operation derives
-BPM, musical key, or tuning from the audio signal.
+Sonic decodes no more than 180 seconds to low-rate mono PCM. It estimates tempo
+with an onset/autocorrelation model and musical key with chroma/profile matching.
+It does not derive tuning, loudness, clipping, or production-quality judgments.
 
-Before a Session item enters the export queue, the inspector shows the source
-evidence and editable final fields. The producer confirms or corrects those
-fields. Sidecar schema version 1 stores the final values and the available
-source-text or tag evidence; that evidence is not proof of a manually edited
-final value.
+## Automatic fill rule
 
-## Future audio-derived estimates
-
-If Sonic later analyzes the audio signal, the results must remain a separate
-`Detected` or `Audio analysis` layer. They must not be merged silently into
-`Suggested`, copied into `Final` when analysis completes, or presented as
-ground truth.
-
-Any future implementation must:
-
-- label tempo, key, and tuning as estimates;
-- report confidence separately for each estimate;
-- show the analyzed duration, engine version, warnings, and failure state;
-- keep declared text, embedded tags, and audio-derived evidence distinguishable;
-- require an explicit producer action to apply each estimate to a final field;
-- preserve manual edits when late or repeated analysis completes; and
-- record the origin of every applied final field in any new sidecar schema.
-
-The invariant is:
+A reliable audio estimate may fill a blank final BPM or key. The merge order is:
 
 ```text
-declared text ─┐
-               ├─ parsed suggestion ─┐
-embedded tags ─┘                     │
-                                     ├─ explicit producer choice ── final metadata
-audio estimate ──────────────────────┘
+manual / queued value > embedded or declared value > qualified audio estimate > blank
 ```
 
-Marketing, release notes, screenshots, and interface copy must reserve terms
-such as "audio-derived," "detected," and "audio analysis" for this future
-boundary until a shipped build performs the work described.
+Analysis never replaces a nonblank value. Job updates use optimistic revisions,
+so a stale analysis result cannot overwrite newer queue state. A failed or
+low-confidence analysis is non-fatal and the download/export continues.
+
+The UI labels detected values and confidence. Schema-v2 sidecars store the
+analysis record independently of final metadata; schema-v1 sidecars remain
+readable without an analysis record.
+
+## Claims Sonic must not make
+
+- A detected BPM or key is not ground truth.
+- Text/tag confidence is not acoustic confidence.
+- Sonic does not currently analyze tuning or loudness from the waveform.
+- Stem separation is optional local ML processing and can contain artifacts.
+- Download support does not bypass private, paid, removed, or protected media.

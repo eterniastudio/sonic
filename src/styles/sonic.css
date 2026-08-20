@@ -252,8 +252,13 @@
 
 .composer-input textarea {
   min-width: 0;
+  min-height: 28px;
   max-height: 92px;
-  resize: vertical;
+  resize: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overflow-wrap: anywhere;
   border: 0;
   outline: 0;
   background: transparent;
@@ -1941,7 +1946,9 @@ kbd {
   place-items: center;
 }
 
-.shortcut-dialog {
+.shortcut-dialog,
+.command-palette,
+.tutorial-dialog {
   width: min(500px, 100%);
   overflow: hidden;
   border: 1px solid var(--line-strong);
@@ -1969,6 +1976,27 @@ kbd {
 .shortcut-dialog dl > div:last-child { border-bottom: 0; }
 .shortcut-dialog dt { display: flex; gap: 4px; }
 .shortcut-dialog dd { margin: 0; color: var(--text-2); font-size: 13px; }
+
+.command-palette { width: min(560px, 100%); }
+.command-palette header { display: flex; align-items: center; gap: 10px; padding: 15px; }
+.command-palette h2 { margin: 0; }
+.command-list button { display: flex; width: 100%; min-height: 43px; align-items: center; justify-content: space-between; padding: 0 10px; background: transparent; color: var(--text-2); }
+.command-list button:hover { background: var(--surface-hover); }
+
+.tutorial-dialog {
+  width: min(620px, 100%);
+}
+.tutorial-dialog > header,
+.tutorial-dialog > footer { display: flex; align-items: center; justify-content: space-between; padding: 14px 17px; }
+.tutorial-dialog > header button { background: transparent; color: var(--text-3); }
+.tutorial-signal { display: grid; width: min(330px, 70%); grid-template-columns: repeat(4, 1fr); gap: 7px; }
+.tutorial-signal i { height: 3px; background: var(--surface-3); }
+.tutorial-signal i.is-live { background: var(--signal); }
+.tutorial-copy { padding: 38px 52px; }
+.tutorial-copy h2 { margin: 0; font-size: clamp(34px, 6vw, 52px); }
+.tutorial-copy p { color: var(--text-2); }
+.tutorial-dialog > footer { border-top: 1px solid var(--line); }
+.tutorial-dialog > footer button:disabled { opacity: 0; pointer-events: none; }
 
 .boot-screen {
   display: flex;
@@ -2049,6 +2077,10 @@ kbd {
   .transport-icon { width: 36px; height: 36px; }
   .transport-controls { grid-template-columns: 38px 36px minmax(130px, 1fr) 36px 32px; gap: 3px; }
   .session-page { padding-top: 12px; }
+  .composer-input { grid-template-columns: auto minmax(0, 1fr) 34px; align-items: start; }
+  .composer-input > svg { margin-top: 8px; }
+  .composer-add { grid-column: 2 / -1; min-height: 36px; }
+  .tutorial-copy { min-height: 250px; padding: 26px 24px; }
   .composer-footer > span:not(.shortcut-copy),
   .composer-footer kbd,
   .shortcut-copy { display: none; }

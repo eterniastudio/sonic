@@ -20,6 +20,7 @@ import type {
   SonicSettings,
   SourceInput,
   SourceInspection,
+  StemEngineStatus,
   Tag,
 } from "../domain/types";
 
@@ -58,32 +59,35 @@ export interface SonicBridge {
   openSource(source: SourceInput): Promise<void>;
   prepareEngine(): Promise<void>;
   refreshDependencies(): Promise<Diagnostics>;
+  getStemEngineStatus(): Promise<StemEngineStatus>;
+  prepareStemEngine(): Promise<void>;
+  separateLibraryItemStems(itemId: string): Promise<string[]>;
   
   // Library roots (v0.3)
   listLibraryRoots(): Promise<LibraryRoot[]>;
-  createLibraryRoot(name: string, path: string): Promise<LibraryRoot>;
-  updateLibraryRoot(id: number, patch: { name?: string; path?: string; enabled?: boolean }): Promise<LibraryRoot>;
-  deleteLibraryRoot(id: number): Promise<void>;
-  relinkLibraryRoot(oldRootId: number, newRootId: number): Promise<number>;
+  createLibraryRoot(label: string, rootPath: string): Promise<string>;
+  updateLibraryRoot(id: string, patch: { label?: string; rootPath?: string }): Promise<void>;
+  deleteLibraryRoot(id: string): Promise<void>;
+  relinkLibraryRoot(id: string, newRootPath: string): Promise<number>;
   
   // Tags (v0.3)
   listTags(): Promise<Tag[]>;
-  createTag(name: string, color?: string): Promise<Tag>;
-  updateTag(id: number, patch: { name?: string; color?: string }): Promise<Tag>;
-  deleteTag(id: number): Promise<void>;
-  assignTagToItem(itemId: string, tagId: number): Promise<void>;
-  removeTagFromItem(itemId: string, tagId: number): Promise<void>;
+  createTag(name: string, color?: string): Promise<string>;
+  updateTag(id: string, patch: { name?: string; color?: string }): Promise<void>;
+  deleteTag(id: string): Promise<void>;
+  assignTagToItem(itemId: string, tagId: string): Promise<void>;
+  removeTagFromItem(itemId: string, tagId: string): Promise<void>;
   
   // Collections (v0.3)
   listCollections(): Promise<Collection[]>;
-  createCollection(name: string, description?: string): Promise<Collection>;
-  updateCollection(id: number, patch: { name?: string; description?: string }): Promise<Collection>;
-  deleteCollection(id: number): Promise<void>;
-  addItemsToCollection(collectionId: number, itemIds: string[]): Promise<void>;
-  removeItemsFromCollection(collectionId: number, itemIds: string[]): Promise<void>;
+  createCollection(name: string, description?: string): Promise<string>;
+  updateCollection(id: string, patch: { name?: string; description?: string }): Promise<void>;
+  deleteCollection(id: string): Promise<void>;
+  addItemsToCollection(collectionId: string, itemIds: string[]): Promise<void>;
+  removeItemsFromCollection(collectionId: string, itemIds: string[]): Promise<void>;
   
   // Bulk actions (v0.3)
-  bulkTagItems(itemIds: string[], tagId: number): Promise<void>;
+  bulkTagItems(itemIds: string[], tagId: string): Promise<void>;
   bulkUpdateItems(itemIds: string[], patch: Partial<LibraryItem>): Promise<void>;
   bulkDeleteItems(itemIds: string[], deleteFiles: boolean): Promise<void>;
   

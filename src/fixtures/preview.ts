@@ -2,11 +2,14 @@ import { BUILTIN_PRESETS, DEFAULT_SETTINGS } from "../domain/defaults";
 import { renderFilename } from "../domain/filename";
 import type {
   BootstrapPayload,
+  Collection,
   Diagnostics,
+  DuplicateGroup,
   ExportRequest,
   FilenamePreviewRequest,
   LibraryFilters,
   LibraryItem,
+  LibraryRoot,
   LibrarySort,
   PreviewAsset,
   QueueItem,
@@ -14,6 +17,7 @@ import type {
   SonicSettings,
   SourceInput,
   SourceInspection,
+  Tag,
 } from "../domain/types";
 import type { SonicBridge, Unsubscribe } from "../services/bridge-types";
 
@@ -22,6 +26,11 @@ const STORAGE_KEY = "sonic-v02-browser-preview";
 type PreviewStore = {
   jobs: QueueItem[];
   library: LibraryItem[];
+  libraryRoots: LibraryRoot[];
+  tags: Tag[];
+  collections: Collection[];
+  tagAssignments: Record<string, string[]>;
+  collectionItems: Record<string, string[]>;
   settings: SonicSettings;
   paused: boolean;
 };
@@ -189,13 +198,31 @@ const DEFAULT_LIBRARY: LibraryItem[] = [
 function readStore(): PreviewStore {
   try {
     const value = localStorage.getItem(STORAGE_KEY);
-    if (value) return JSON.parse(value) as PreviewStore;
+    if (value) {
+      const parsed = JSON.parse(value) as Partial<PreviewStore>;
+      return {
+        jobs: parsed.jobs ?? DEFAULT_JOBS,
+        library: parsed.library ?? DEFAULT_LIBRARY,
+        libraryRoots: parsed.libraryRoots ?? [],
+        tags: parsed.tags ?? [],
+        collections: parsed.collections ?? [],
+        tagAssignments: parsed.tagAssignments ?? {},
+        collectionItems: parsed.collectionItems ?? {},
+        settings: parsed.settings ?? DEFAULT_SETTINGS,
+        paused: parsed.paused ?? false,
+      };
+    }
   } catch {
     // Browser preview remains usable when storage is unavailable.
   }
   return {
     jobs: DEFAULT_JOBS,
     library: DEFAULT_LIBRARY,
+    libraryRoots: [],
+    tags: [],
+    collections: [],
+    tagAssignments: {},
+    collectionItems: {},
     settings: {
       ...DEFAULT_SETTINGS,
       defaultOutputDirectory: "C:\\Users\\Producer\\Downloads\\Sonic",
@@ -255,15 +282,17 @@ export class BrowserPreviewBridge implements SonicBridge {
 
   async inspectSource(source: SourceInput): Promise<SourceInspection> {
     await new Promise((resolve) => window.setTimeout(resolve, 650));
-    if (source.kind === "youtube") {
+    if (source.kind !== "localFile") {
       const suffix = source.url.includes("jNQXAC9IVRw") ? "" : ` ${source.url.slice(-4).toUpperCase()}`;
       return {
         ...structuredClone(NIGHT_SHIFT),
         id: makeId("source"),
         source,
-        sourceFingerprint: `preview:youtube:${source.url}`,
+        sourceFingerprint: `preview:${source.kind}:${source.url}`,
+        kind: source.kind,
         title: `${NIGHT_SHIFT.title}${suffix}`,
         sourceUrl: source.url,
+        sourceLabel: source.kind === "soundcloud" ? "SoundCloud" : "YouTube",
       };
     }
     const rawName = source.path.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") ?? "Imported audio";
@@ -640,7 +669,7 @@ export class BrowserPreviewBridge implements SonicBridge {
   }
 
   async openSource(source: SourceInput) {
-    if (source.kind === "youtube") window.open(source.url, "_blank", "noopener,noreferrer");
+    if (source.kind !== "localFile") window.open(source.url, "_blank", "noopener,noreferrer");
     else window.alert(`Browser preview would open:\n${source.path}`);
   }
 
@@ -650,5 +679,178 @@ export class BrowserPreviewBridge implements SonicBridge {
 
   async refreshDependencies() {
     return this.getDiagnostics();
+  }
+
+  async getStemEngineStatus() {
+    return { installed: true, model: "Demucs v4 htdemucs_ft", description: "Browser preview stem engine" };
+  }
+
+  async prepareStemEngine() {
+    await new Promise((resolve) => window.setTimeout(resolve, 600));
+  }
+
+  async separateLibraryItemStems(_itemId: string) {
+    await new Promise((resolve) => window.setTimeout(resolve, 900));
+    return ["Vocals.wav", "Drums.wav", "Bass.wav", "Other.wav"];
+  }
+
+  async listLibraryRoots() {
+    return structuredClone(this.store.libraryRoots);
+  }
+
+  async createLibraryRoot(label: string, rootPath: string) {
+    const id = makeId("root");
+    const now = Date.now();
+    this.store.libraryRoots.push({ id, label, rootPath, createdAtMs: now, updatedAtMs: now });
+    this.persist();
+    return id;
+  }
+
+  async updateLibraryRoot(id: string, patch: { label?: string; rootPath?: string }) {
+    const root = this.store.libraryRoots.find((candidate) => candidate.id === id);
+    if (!root) throw new Error("That library root no longer exists.");
+    Object.assign(root, patch, { updatedAtMs: Date.now() });
+    this.persist();
+  }
+
+  async deleteLibraryRoot(id: string) {
+    this.store.libraryRoots = this.store.libraryRoots.filter((root) => root.id !== id);
+    this.persist();
+  }
+
+  async relinkLibraryRoot(id: string, newRootPath: string) {
+    await this.updateLibraryRoot(id, { rootPath: newRootPath });
+    return 0;
+  }
+
+  async listTags() {
+    return structuredClone(this.store.tags.map((tag) => ({
+      ...tag,
+      itemCount: Object.values(this.store.tagAssignments).filter((ids) => ids.includes(tag.id)).length,
+    })));
+  }
+
+  async createTag(name: string, color?: string) {
+    const id = makeId("tag");
+    this.store.tags.push({ id, name, color, itemCount: 0, createdAtMs: Date.now() });
+    this.persist();
+    return id;
+  }
+
+  async updateTag(id: string, patch: { name?: string; color?: string }) {
+    const tag = this.store.tags.find((candidate) => candidate.id === id);
+    if (!tag) throw new Error("That tag no longer exists.");
+    Object.assign(tag, patch);
+    this.persist();
+  }
+
+  async deleteTag(id: string) {
+    this.store.tags = this.store.tags.filter((tag) => tag.id !== id);
+    for (const itemId of Object.keys(this.store.tagAssignments)) {
+      this.store.tagAssignments[itemId] = this.store.tagAssignments[itemId].filter((tagId) => tagId !== id);
+    }
+    this.persist();
+  }
+
+  async assignTagToItem(itemId: string, tagId: string) {
+    const current = this.store.tagAssignments[itemId] ?? [];
+    if (!current.includes(tagId)) this.store.tagAssignments[itemId] = [...current, tagId];
+    this.persist();
+  }
+
+  async removeTagFromItem(itemId: string, tagId: string) {
+    this.store.tagAssignments[itemId] = (this.store.tagAssignments[itemId] ?? []).filter((id) => id !== tagId);
+    this.persist();
+  }
+
+  async listCollections() {
+    return structuredClone(this.store.collections.map((collection) => ({
+      ...collection,
+      itemCount: this.store.collectionItems[collection.id]?.length ?? 0,
+    })));
+  }
+
+  async createCollection(name: string, description?: string) {
+    const id = makeId("collection");
+    const now = Date.now();
+    this.store.collections.push({
+      id,
+      name,
+      description,
+      isSmart: false,
+      itemCount: 0,
+      createdAtMs: now,
+      updatedAtMs: now,
+    });
+    this.persist();
+    return id;
+  }
+
+  async updateCollection(id: string, patch: { name?: string; description?: string }) {
+    const collection = this.store.collections.find((candidate) => candidate.id === id);
+    if (!collection) throw new Error("That collection no longer exists.");
+    Object.assign(collection, patch, { updatedAtMs: Date.now() });
+    this.persist();
+  }
+
+  async deleteCollection(id: string) {
+    this.store.collections = this.store.collections.filter((collection) => collection.id !== id);
+    delete this.store.collectionItems[id];
+    this.persist();
+  }
+
+  async addItemsToCollection(collectionId: string, itemIds: string[]) {
+    const current = this.store.collectionItems[collectionId] ?? [];
+    this.store.collectionItems[collectionId] = [...new Set([...current, ...itemIds])];
+    this.persist();
+  }
+
+  async removeItemsFromCollection(collectionId: string, itemIds: string[]) {
+    const removed = new Set(itemIds);
+    this.store.collectionItems[collectionId] = (this.store.collectionItems[collectionId] ?? [])
+      .filter((id) => !removed.has(id));
+    this.persist();
+  }
+
+  async bulkTagItems(itemIds: string[], tagId: string) {
+    await Promise.all(itemIds.map((itemId) => this.assignTagToItem(itemId, tagId)));
+  }
+
+  async bulkUpdateItems(itemIds: string[], patch: Partial<LibraryItem>) {
+    const selected = new Set(itemIds);
+    this.store.library = this.store.library.map((item) => selected.has(item.id) ? { ...item, ...patch, id: item.id } : item);
+    this.persist();
+  }
+
+  async bulkDeleteItems(itemIds: string[], _deleteFiles: boolean) {
+    const selected = new Set(itemIds);
+    this.store.library = this.store.library.filter((item) => !selected.has(item.id));
+    this.persist();
+  }
+
+  private duplicateGroups(keyFor: (item: LibraryItem) => string | undefined, groupType: DuplicateGroup["groupType"]) {
+    const grouped = new Map<string, string[]>();
+    for (const item of this.store.library) {
+      const fingerprint = keyFor(item);
+      if (fingerprint) grouped.set(fingerprint, [...(grouped.get(fingerprint) ?? []), item.id]);
+    }
+    return [...grouped.entries()]
+      .filter(([, itemIds]) => itemIds.length > 1)
+      .map(([fingerprint, itemIds]) => ({ fingerprint, groupType, itemIds, count: itemIds.length }));
+  }
+
+  async findDuplicatesBySha256() {
+    return this.duplicateGroups((item) => item.sha256, "exact_sha256");
+  }
+
+  async findDuplicatesBySource() {
+    return this.duplicateGroups(
+      (item) => item.source.kind !== "localFile" ? item.source.url : item.source.path.toLocaleLowerCase(),
+      "same_source",
+    );
+  }
+
+  async scanSidecarFolder(_folderPath: string, _recursive: boolean) {
+    return { scannedCount: 0, importedCount: 0, skippedCount: 0, errorCount: 0, errors: [] };
   }
 }

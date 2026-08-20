@@ -3,11 +3,11 @@ import {
   ArrowClockwise,
   FileAudio,
   FolderOpen,
-  Funnel,
   MagnifyingGlass,
   Play,
   Trash,
   WarningCircle,
+  Waveform,
 } from "@phosphor-icons/react";
 import { useSonic } from "../../app/SonicProvider";
 import { formatBytes, formatDuration, shortPath } from "../../domain/format";
@@ -26,11 +26,13 @@ export function LibraryPage() {
     revealPath,
     openSource,
     loadPreview,
+    separateLibraryItemStems,
   } = useSonic();
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<LibraryFilters>(EMPTY_FILTERS);
   const [sort, setSort] = useState<LibrarySort>("newest");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [separatingId, setSeparatingId] = useState<string | null>(null);
   const hasFilters = Boolean(query.trim() || filters.format || filters.key || filters.bpmMin || filters.bpmMax || filters.missingOnly);
 
   useEffect(() => {
@@ -61,7 +63,7 @@ export function LibraryPage() {
             {query ? <button type="button" onClick={() => setQuery("")} aria-label="Clear library search">×</button> : null}
           </label>
           <button className={filtersOpen ? "is-active" : ""} type="button" onClick={() => setFiltersOpen((open) => !open)} aria-expanded={filtersOpen}>
-            <Funnel size={17} weight={filtersOpen ? "fill" : "regular"} aria-hidden="true" /> Filters
+            <MagnifyingGlass size={17} weight={filtersOpen ? "fill" : "regular"} aria-hidden="true" /> Filters
           </button>
           <label className="sort-field">
             <span className="sr-only">Sort library</span>
@@ -134,6 +136,7 @@ export function LibraryPage() {
               <button className="primary-action" type="button" disabled={!selected.exists} onClick={() => void loadPreview(selected)}><Play size={17} weight="fill" aria-hidden="true" /> Play</button>
               <button type="button" disabled={!selected.exists} onClick={() => void revealPath(selected.outputPath)}><FolderOpen size={17} aria-hidden="true" /> Show in folder</button>
               <button type="button" onClick={() => void reexportLibraryItem(selected.id)}><ArrowClockwise size={17} aria-hidden="true" /> Export again</button>
+              <button type="button" disabled={!selected.exists || separatingId === selected.id} onClick={async () => { setSeparatingId(selected.id); try { await separateLibraryItemStems(selected.id); } finally { setSeparatingId(null); } }}><Waveform size={17} aria-hidden="true" /> {separatingId === selected.id ? "Separating…" : "Create 4 stems"}</button>
               <button type="button" onClick={() => void openSource(selected.source)}><FileAudio size={17} aria-hidden="true" /> Open original</button>
             </div>
             <button className="destructive-text" type="button" onClick={() => {

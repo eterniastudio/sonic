@@ -34,8 +34,9 @@ url = "2"
 uuid = { version = "1", features = ["v4"] }
 sha2 = "=0.11.0"
 thiserror = "2"
-rusqlite = { version = "0.40.2", features = ["bundled", "serde_json"] }
+rusqlite = { version = "0.40.2", features = ["backup", "bundled", "serde_json"] }
 tokio = { version = "1", features = ["sync", "time"] }
 fs2 = "0.4"
 time = { version = "0.3", features = ["formatting"] }
 walkdir = "2"
+rustfft = "6"

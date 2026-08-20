@@ -3,11 +3,12 @@ use std::{fs, io::Write, path::Path, path::PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    audio_analysis::AudioAnalysis,
     error::{invalid, AppResult},
     models::{AudioProperties, ExportSpec, FinalMetadata, SourceInspection, SourceSpec},
 };
 
-pub const SIDECAR_SCHEMA_VERSION: u32 = 1;
+pub const SIDECAR_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,6 +21,8 @@ pub struct SonicSidecar {
     pub created_at_ms: i64,
     pub source: SidecarSource,
     pub metadata: FinalMetadata,
+    #[serde(default)]
+    pub audio_analysis: Option<AudioAnalysis>,
     pub inspection_audio: AudioProperties,
     pub output_audio: AudioProperties,
     pub export: ExportSpec,
@@ -76,6 +79,7 @@ pub fn build_sidecar(input: SidecarBuild<'_>) -> SonicSidecar {
             input.include_source_path,
         ),
         metadata: input.metadata.clone(),
+        audio_analysis: input.inspection.audio_analysis.clone(),
         inspection_audio: input.inspection.audio.clone(),
         output_audio: input.output_audio.clone(),
         export: input.export.clone(),
@@ -108,7 +112,7 @@ pub fn read_sidecar(path: &Path) -> AppResult<SonicSidecar> {
         return Err(invalid("The Sonic metadata sidecar is invalid"));
     }
     let value: SonicSidecar = serde_json::from_slice(&fs::read(path)?)?;
-    if value.schema_version != SIDECAR_SCHEMA_VERSION {
+    if value.schema_version == 0 || value.schema_version > SIDECAR_SCHEMA_VERSION {
         return Err(invalid("The Sonic metadata sidecar version is unsupported"));
     }
     Ok(value)
@@ -135,6 +139,16 @@ fn sidecar_source(
                 original_path: None,
             }
         }
+        SourceSpec::Soundcloud { url } => SidecarSource {
+            kind: "soundcloud".into(),
+            source_fingerprint: source_fingerprint.to_string(),
+            provider_id: source_fingerprint
+                .strip_prefix("soundcloud:")
+                .map(str::to_string),
+            canonical_url: Some(url.clone()),
+            file_name: None,
+            original_path: None,
+        },
         SourceSpec::LocalFile { path } => SidecarSource {
             kind: "localFile".into(),
             source_fingerprint: source_fingerprint.to_string(),
@@ -179,6 +193,7 @@ mod tests {
             declared_metadata: MusicMetadata::default(),
             embedded_metadata: MusicMetadata::default(),
             suggested_metadata: MusicMetadata::default(),
+            audio_analysis: None,
             warnings: vec![],
         };
         let metadata = FinalMetadata {
@@ -209,5 +224,19 @@ mod tests {
         });
         assert_eq!(value.source.file_name.as_deref(), Some("beat.wav"));
         assert!(value.source.original_path.is_none());
+        assert_eq!(value.schema_version, 2);
+
+        let root =
+            std::env::temp_dir().join(format!("sonic-sidecar-schema-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let path = root.join("legacy.sonic.json");
+        let mut legacy = value;
+        legacy.schema_version = 1;
+        fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+        assert_eq!(read_sidecar(&path).unwrap().schema_version, 1);
+        legacy.schema_version = SIDECAR_SCHEMA_VERSION + 1;
+        fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+        assert!(read_sidecar(&path).is_err());
+        fs::remove_dir_all(root).unwrap();
     }
 }

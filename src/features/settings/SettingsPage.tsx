@@ -3,13 +3,11 @@ import {
   ArrowClockwise,
   Bug,
   Check,
-  CloudArrowDown,
   DownloadSimple,
-  FloppyDisk,
   FolderOpen,
   HardDrives,
-  ShieldCheck,
   WarningCircle,
+  Waveform,
 } from "@phosphor-icons/react";
 import { useSonic } from "../../app/SonicProvider";
 import { formatBytes, shortPath } from "../../domain/format";
@@ -24,6 +22,8 @@ export function SettingsPage() {
     refreshDiagnostics,
     exportDiagnostics,
     prepareEngine,
+    prepareStemEngine,
+    stemEngine,
     updater,
     checkForUpdates,
     installUpdate,
@@ -67,7 +67,7 @@ export function SettingsPage() {
     <main className="settings-page" aria-labelledby="settings-heading">
       <header className="page-heading settings-heading">
         <div><span className="eyebrow">Preferences</span><h1 id="settings-heading">Settings</h1><p>Choose where files go and how Sonic exports them.</p></div>
-        <button className="primary-action save-settings" type="button" disabled={saving} onClick={() => void save()}><FloppyDisk size={18} weight="bold" aria-hidden="true" />{saving ? "Saving…" : "Save changes"}</button>
+        <button className="primary-action save-settings" type="button" disabled={saving} onClick={() => void save()}><Check size={18} weight="bold" aria-hidden="true" />{saving ? "Saving…" : "Save changes"}</button>
       </header>
 
       <div className="settings-columns">
@@ -90,7 +90,7 @@ export function SettingsPage() {
           </section>
 
           <section className="settings-section" aria-labelledby="naming-settings">
-            <header><div><span className="eyebrow">Naming</span><h2 id="naming-settings">File names</h2></div><FloppyDisk size={21} aria-hidden="true" /></header>
+            <header><div><span className="eyebrow">Naming</span><h2 id="naming-settings">File names</h2></div><HardDrives size={21} aria-hidden="true" /></header>
             <label className="field"><span>Default template</span><textarea rows={3} value={draft.filenameTemplate} onChange={(event) => update("filenameTemplate", event.target.value)} /></label>
             <div className="template-presets">
               {draft.templates.map((template) => <button type="button" key={template.id} className={draft.filenameTemplate === template.template ? "is-selected" : ""} onClick={() => { update("filenameTemplate", template.template); update("defaultTemplateId", template.id); }}><strong>{template.name}</strong><small>{template.template}</small></button>)}
@@ -99,7 +99,7 @@ export function SettingsPage() {
           </section>
 
           <section className="settings-section" aria-labelledby="safety-settings">
-            <header><div><span className="eyebrow">Limits</span><h2 id="safety-settings">Source limits</h2></div><ShieldCheck size={21} aria-hidden="true" /></header>
+            <header><div><span className="eyebrow">Limits</span><h2 id="safety-settings">Source limits</h2></div><Check size={21} aria-hidden="true" /></header>
             <div className="settings-field-grid">
               <label className="field"><span>Maximum duration</span><span className="input-with-unit"><input type="number" min="1" max="360" value={draft.maxDurationMinutes} onChange={(event) => update("maxDurationMinutes", Number(event.target.value))} /><b>minutes</b></span></label>
               <label className="field"><span>Maximum input size</span><span className="input-with-unit"><input type="number" min="1" max="20" step="0.5" value={Math.round(draft.maxInputBytes / 107_374_182.4) / 10} onChange={(event) => update("maxInputBytes", Math.round(Number(event.target.value) * 1024 ** 3))} /><b>GB</b></span></label>
@@ -112,7 +112,7 @@ export function SettingsPage() {
           <section className={`settings-section update-section is-${updater.phase}`} aria-labelledby="update-settings">
             <header>
               <div><span className="eyebrow">Software update</span><h2 id="update-settings">{updateHeading}</h2></div>
-              {updater.phase === "upToDate" ? <Check className="status-good" size={22} weight="bold" aria-hidden="true" /> : <CloudArrowDown className={updater.phase === "error" ? "status-warning" : "update-icon"} size={22} weight="bold" aria-hidden="true" />}
+              {updater.phase === "upToDate" ? <Check className="status-good" size={22} weight="bold" aria-hidden="true" /> : <DownloadSimple className={updater.phase === "error" ? "status-warning" : "update-icon"} size={22} weight="bold" aria-hidden="true" />}
             </header>
             <div className="update-copy">
               <p>
@@ -161,6 +161,14 @@ export function SettingsPage() {
             </div>
           </section>
 
+          <section className="settings-section engine-section" aria-labelledby="stem-engine-settings">
+            <header><div><span className="eyebrow">Optional ML engine</span><h2 id="stem-engine-settings">{stemEngine?.installed ? "Four stems ready" : "Stem setup"}</h2></div><Waveform size={22} aria-hidden="true" /></header>
+            <p className="settings-note">{stemEngine?.description ?? "Split a finished track locally into vocals, drums, bass, and other with Demucs v4 htdemucs_ft."}</p>
+            <div className="dependency-list"><div><span className={stemEngine?.installed ? "is-ready" : ""} aria-hidden="true" /><strong>{stemEngine?.model ?? "Demucs v4 htdemucs_ft"}</strong><small>{stemEngine?.installed ? "Installed" : "Not installed"}</small></div></div>
+            {!stemEngine?.installed ? <div className="engine-actions"><button className="primary-action" type="button" onClick={() => void prepareStemEngine()}><DownloadSimple size={17} aria-hidden="true" /> Set up 4-stem engine</button></div> : null}
+            <p className="settings-note">Setup uses an isolated Python environment. The ML packages and model are large; the model downloads on first separation.</p>
+          </section>
+
           <section className="settings-section diagnostics-section" aria-labelledby="diagnostics-settings">
             <header><div><span className="eyebrow">Support</span><h2 id="diagnostics-settings">Diagnostics</h2></div><Bug size={21} aria-hidden="true" /></header>
             <dl>
@@ -175,6 +183,7 @@ export function SettingsPage() {
             </dl>
             {state.diagnostics.recoveryWarnings?.length ? <div className="inline-alert"><WarningCircle size={17} weight="fill" aria-hidden="true" /><ul>{state.diagnostics.recoveryWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}
             <button type="button" onClick={() => void exportDiagnostics()}><Bug size={17} aria-hidden="true" /> Save support report</button>
+            <button type="button" onClick={() => window.dispatchEvent(new Event("sonic:replay-tutorial"))}><Bug size={17} aria-hidden="true" /> Replay getting-started walkthrough</button>
           </section>
         </aside>
       </div>

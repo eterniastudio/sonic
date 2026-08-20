@@ -28,6 +28,7 @@ import type {
   SonicSettings,
   SourceInput,
   Tag,
+  StemEngineStatus,
 } from "../domain/types";
 import type { SonicBridge, Unsubscribe } from "./bridge-types";
 import {
@@ -113,6 +114,7 @@ function nativeExportRequest(request: ExportRequest) {
       declaredMetadata: request.inspection.declaredMetadata,
       embeddedMetadata: request.inspection.embeddedMetadata,
       suggestedMetadata: request.inspection.suggestedMetadata,
+      audioAnalysis: request.inspection.audioAnalysis ?? null,
       warnings: request.inspection.warnings,
     },
     metadata: finalMetadata({ metadata: request.metadata, inspection: request.inspection }),
@@ -632,8 +634,8 @@ export class NativeBridge implements SonicBridge {
   }
 
   async openSource(source: SourceInput) {
-    if (source.kind === "youtube") await openUrl(source.url);
-    else await revealItemInDir(source.path);
+    if (source.kind === "localFile") await revealItemInDir(source.path);
+    else await openUrl(source.url);
   }
 
   async prepareEngine() {
@@ -661,92 +663,136 @@ export class NativeBridge implements SonicBridge {
     return asArray(value) as LibraryRoot[];
   }
 
-  async createLibraryRoot(name: string, path: string) {
-    const value = await invoke<unknown>("create_library_root", { name, path });
-    return value as LibraryRoot;
+  async getStemEngineStatus(): Promise<StemEngineStatus> {
+    const raw = asRecord(await invoke<unknown>("stem_engine_status"));
+    return {
+      installed: Boolean(raw.installed),
+      model: asString(raw.model, "Demucs v4 htdemucs_ft"),
+      description: asString(raw.description),
+    };
   }
 
-  async updateLibraryRoot(id: number, patch: { name?: string; path?: string; enabled?: boolean }) {
-    const value = await invoke<unknown>("update_library_root", { id, ...patch });
-    return value as LibraryRoot;
+  async prepareStemEngine() {
+    await invoke("prepare_stem_engine");
   }
 
-  async deleteLibraryRoot(id: number) {
+  async separateLibraryItemStems(itemId: string) {
+    return invoke<string[]>("separate_library_item_stems", { itemId });
+  }
+
+  async createLibraryRoot(label: string, rootPath: string) {
+    return invoke<string>("create_library_root", { request: { label, rootPath } });
+  }
+
+  async updateLibraryRoot(id: string, patch: { label?: string; rootPath?: string }) {
+    await invoke("update_library_root", { request: { id, ...patch } });
+  }
+
+  async deleteLibraryRoot(id: string) {
     await invoke("delete_library_root", { id });
   }
 
-  async relinkLibraryRoot(oldRootId: number, newRootId: number) {
-    const value = await invoke<unknown>("relink_library_root", { oldRootId, newRootId });
+  async relinkLibraryRoot(id: string, newRootPath: string) {
+    const value = await invoke<unknown>("relink_library_root", { id, newRootPath });
     return asNumber(value) ?? 0;
   }
 
   // Tags (v0.3)
   async listTags() {
     const value = await invoke<unknown>("list_tags");
-    return asArray(value) as Tag[];
+    return asArray(value).flatMap((entry) => {
+      const tuple = asArray(entry);
+      const tag = asRecord(tuple[0]);
+      const id = asString(tag.id);
+      const name = asString(tag.name);
+      if (!id || !name) return [];
+      return [{
+        id,
+        name,
+        color: asString(tag.color) || undefined,
+        createdAtMs: asNumber(tag.createdAtMs) ?? 0,
+        itemCount: asNumber(tuple[1]) ?? 0,
+      } satisfies Tag];
+    });
   }
 
   async createTag(name: string, color?: string) {
-    const value = await invoke<unknown>("create_tag", { name, color });
-    return value as Tag;
+    return invoke<string>("create_tag", { request: { name, color } });
   }
 
-  async updateTag(id: number, patch: { name?: string; color?: string }) {
-    const value = await invoke<unknown>("update_tag", { id, ...patch });
-    return value as Tag;
+  async updateTag(id: string, patch: { name?: string; color?: string }) {
+    await invoke("update_tag", { id, ...patch });
   }
 
-  async deleteTag(id: number) {
+  async deleteTag(id: string) {
     await invoke("delete_tag", { id });
   }
 
-  async assignTagToItem(itemId: string, tagId: number) {
+  async assignTagToItem(itemId: string, tagId: string) {
     await invoke("assign_tag_to_item", { itemId, tagId });
   }
 
-  async removeTagFromItem(itemId: string, tagId: number) {
+  async removeTagFromItem(itemId: string, tagId: string) {
     await invoke("remove_tag_from_item", { itemId, tagId });
   }
 
   // Collections (v0.3)
   async listCollections() {
     const value = await invoke<unknown>("list_collections");
-    return asArray(value) as Collection[];
+    return asArray(value).flatMap((entry) => {
+      const tuple = asArray(entry);
+      const collection = asRecord(tuple[0]);
+      const id = asString(collection.id);
+      const name = asString(collection.name);
+      if (!id || !name) return [];
+      return [{
+        id,
+        name,
+        description: asString(collection.description) || undefined,
+        isSmart: collection.isSmart === true,
+        queryJson: asString(collection.queryJson) || undefined,
+        createdAtMs: asNumber(collection.createdAtMs) ?? 0,
+        updatedAtMs: asNumber(collection.updatedAtMs) ?? 0,
+        itemCount: asNumber(tuple[1]) ?? 0,
+      } satisfies Collection];
+    });
   }
 
   async createCollection(name: string, description?: string) {
-    const value = await invoke<unknown>("create_collection", { name, description });
-    return value as Collection;
+    return invoke<string>("create_collection", {
+      request: { name, description, isSmart: false, queryJson: null },
+    });
   }
 
-  async updateCollection(id: number, patch: { name?: string; description?: string }) {
-    const value = await invoke<unknown>("update_collection", { id, ...patch });
-    return value as Collection;
+  async updateCollection(id: string, patch: { name?: string; description?: string }) {
+    await invoke("update_collection", { request: { id, ...patch } });
   }
 
-  async deleteCollection(id: number) {
+  async deleteCollection(id: string) {
     await invoke("delete_collection", { id });
   }
 
-  async addItemsToCollection(collectionId: number, itemIds: string[]) {
-    await invoke("add_items_to_collection", { collectionId, itemIds });
+  async addItemsToCollection(collectionId: string, itemIds: string[]) {
+    await invoke("add_items_to_collection", { request: { collectionId, itemIds } });
   }
 
-  async removeItemsFromCollection(collectionId: number, itemIds: string[]) {
-    await invoke("remove_items_from_collection", { collectionId, itemIds });
+  async removeItemsFromCollection(collectionId: string, itemIds: string[]) {
+    await invoke("remove_items_from_collection", { request: { collectionId, itemIds } });
   }
 
   // Bulk actions (v0.3)
-  async bulkTagItems(itemIds: string[], tagId: number) {
-    await invoke("bulk_tag_items", { itemIds, tagId });
+  async bulkTagItems(itemIds: string[], tagId: string) {
+    await invoke("bulk_tag_items", { request: { itemIds, tagIds: [tagId] } });
   }
 
   async bulkUpdateItems(itemIds: string[], patch: Partial<LibraryItem>) {
-    await invoke("bulk_update_items", { itemIds, patch });
+    await invoke("bulk_update_items", { request: { itemIds, ...patch } });
   }
 
   async bulkDeleteItems(itemIds: string[], deleteFiles: boolean) {
-    await invoke("bulk_delete_items", { itemIds, deleteFiles });
+    await invoke("bulk_delete_items", {
+      request: { itemIds, deleteAudio: deleteFiles, deleteSidecar: deleteFiles },
+    });
   }
 
   // Duplicate detection (v0.3)
@@ -756,7 +802,7 @@ export class NativeBridge implements SonicBridge {
   }
 
   async findDuplicatesBySource() {
-    const value = await invoke<unknown>("find_duplicates_by_source");
+    const value = await invoke<unknown>("find_duplicates_by_source_fingerprint");
     return asArray(value) as DuplicateGroup[];
   }
 

@@ -11,6 +11,7 @@ import type {
   QueueItem,
   SonicSettings,
   SourceInput,
+  StemEngineStatus,
   UpdaterState,
 } from "../domain/types";
 import { getBridge } from "../services/bridge";
@@ -42,7 +43,9 @@ function errorMessage(error: unknown) {
 }
 
 function sourceKey(source: SourceInput) {
-  return source.kind === "youtube" ? `youtube:${source.url.trim()}` : `file:${source.path.toLocaleLowerCase()}`;
+  return source.kind === "localFile"
+    ? `file:${source.path.toLocaleLowerCase()}`
+    : `${source.kind}:${source.url.trim()}`;
 }
 
 export type SonicContextValue = {
@@ -52,6 +55,7 @@ export type SonicContextValue = {
   selectedLibraryItem: LibraryItem | null;
   bridgeMode: SonicBridge["mode"];
   updater: UpdaterState;
+  stemEngine: StemEngineStatus | null;
   setRoute(route: AppRoute): void;
   selectJob(itemId: string | null): void;
   selectLibraryItem(itemId: string | null): void;
@@ -80,6 +84,8 @@ export type SonicContextValue = {
   refreshDiagnostics(): Promise<void>;
   exportDiagnostics(): Promise<void>;
   prepareEngine(): Promise<void>;
+  prepareStemEngine(): Promise<void>;
+  separateLibraryItemStems(itemId: string): Promise<string[]>;
   checkForUpdates(): Promise<void>;
   installUpdate(): Promise<void>;
   loadPreview(item: QueueItem | LibraryItem): Promise<void>;
@@ -92,27 +98,27 @@ export type SonicContextValue = {
   setShortcutsOpen(open: boolean): void;
   // v0.3 Library Intelligence
   listLibraryRoots(): Promise<void>;
-  createLibraryRoot(name: string, path: string): Promise<void>;
-  updateLibraryRoot(id: number, patch: { name?: string; path?: string; enabled?: boolean }): Promise<void>;
-  deleteLibraryRoot(id: number): Promise<void>;
+  createLibraryRoot(label: string, rootPath: string): Promise<void>;
+  updateLibraryRoot(id: string, patch: { label?: string; rootPath?: string }): Promise<void>;
+  deleteLibraryRoot(id: string): Promise<void>;
   listTags(): Promise<void>;
   createTag(name: string, color?: string): Promise<void>;
-  updateTag(id: number, patch: { name?: string; color?: string }): Promise<void>;
-  deleteTag(id: number): Promise<void>;
-  assignTagToItem(itemId: string, tagId: number): Promise<void>;
-  removeTagFromItem(itemId: string, tagId: number): Promise<void>;
+  updateTag(id: string, patch: { name?: string; color?: string }): Promise<void>;
+  deleteTag(id: string): Promise<void>;
+  assignTagToItem(itemId: string, tagId: string): Promise<void>;
+  removeTagFromItem(itemId: string, tagId: string): Promise<void>;
   listCollections(): Promise<void>;
   createCollection(name: string, description?: string): Promise<void>;
-  updateCollection(id: number, patch: { name?: string; description?: string }): Promise<void>;
-  deleteCollection(id: number): Promise<void>;
-  addItemsToCollection(collectionId: number, itemIds: string[]): Promise<void>;
-  removeItemsFromCollection(collectionId: number, itemIds: string[]): Promise<void>;
-  bulkTagItems(itemIds: string[], tagId: number): Promise<void>;
+  updateCollection(id: string, patch: { name?: string; description?: string }): Promise<void>;
+  deleteCollection(id: string): Promise<void>;
+  addItemsToCollection(collectionId: string, itemIds: string[]): Promise<void>;
+  removeItemsFromCollection(collectionId: string, itemIds: string[]): Promise<void>;
+  bulkTagItems(itemIds: string[], tagId: string): Promise<void>;
   bulkDeleteItems(itemIds: string[], deleteFiles: boolean): Promise<void>;
   findDuplicatesBySha256(): Promise<void>;
   scanSidecarFolder(folderPath: string, recursive: boolean): Promise<void>;
-  toggleTagSelection(tagId: number): void;
-  selectCollection(collectionId: number | null): void;
+  toggleTagSelection(tagId: string): void;
+  selectCollection(collectionId: string | null): void;
 };
 
 const SonicContext = createContext<SonicContextValue | null>(null);
@@ -124,6 +130,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     phase: bridge.mode === "native" ? "idle" : "unavailable",
     downloadedBytes: 0,
   });
+  const [stemEngine, setStemEngine] = useState<StemEngineStatus | null>(null);
   const stateRef = useRef(state);
   const pendingUpdateRef = useRef<SonicUpdate | null>(null);
   const updateCheckRef = useRef<Promise<void> | null>(null);
@@ -133,6 +140,33 @@ export function SonicProvider({ children }: { children: ReactNode }) {
   const setError = useCallback((error: unknown) => {
     dispatch({ type: "setError", error: errorMessage(error) });
   }, []);
+
+  useEffect(() => {
+    void bridge.getStemEngineStatus().then(setStemEngine).catch(() => setStemEngine(null));
+  }, [bridge]);
+
+  const prepareStemEngine = useCallback(async () => {
+    try {
+      dispatch({ type: "announce", message: "Setting up the optional four-stem engine…" });
+      await bridge.prepareStemEngine();
+      setStemEngine(await bridge.getStemEngineStatus());
+      dispatch({ type: "announce", message: "Four-stem engine is ready." });
+    } catch (error) {
+      setError(error);
+    }
+  }, [bridge, setError]);
+
+  const separateLibraryItemStems = useCallback(async (itemId: string) => {
+    try {
+      dispatch({ type: "announce", message: "Separating vocals, drums, bass, and other…" });
+      const files = await bridge.separateLibraryItemStems(itemId);
+      dispatch({ type: "announce", message: `Created ${files.length} stems beside the export.` });
+      return files;
+    } catch (error) {
+      setError(error);
+      return [];
+    }
+  }, [bridge, setError]);
 
   const ensureMediaEngine = useCallback(async () => {
     if (bridge.mode !== "native" || stateRef.current.diagnostics.engine.ready) return;
@@ -211,7 +245,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     const existing = new Set(selectJobs(stateRef.current).map((item) => sourceKey(item.source)));
     const unique = sources.filter((source, index) => {
       const key = sourceKey(source);
-      return key.replace(/^(?:youtube:|file:)$/, "") && !existing.has(key)
+      return key.replace(/^(?:(?:youtube|soundcloud):|file:)$/, "") && !existing.has(key)
         && sources.findIndex((candidate) => sourceKey(candidate) === key) === index;
     });
     if (!unique.length) {
@@ -260,7 +294,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
       }
     });
     if (!entries.length) {
-      setError("Paste at least one YouTube link.");
+      setError("Paste at least one YouTube or SoundCloud link.");
       return;
     }
     if (invalid) {
@@ -268,7 +302,10 @@ export function SonicProvider({ children }: { children: ReactNode }) {
       return;
     }
     dispatch({ type: "setError", error: null });
-    await addSources(entries.map((url) => ({ kind: "youtube", url })));
+    await addSources(entries.map((url) => ({
+      kind: new URL(url).hostname.toLocaleLowerCase().endsWith("soundcloud.com") ? "soundcloud" : "youtube",
+      url,
+    })));
   }, [addSources, setError]);
 
   const addLocalPaths = useCallback(async (paths: string[]) => {
@@ -702,15 +739,15 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     try { dispatch({ type: "setLibraryRoots", roots: await bridge.listLibraryRoots() }); } catch (error) { setError(error); }
   }, [bridge, setError]);
 
-  const createLibraryRoot = useCallback(async (name: string, path: string) => {
-    try { await bridge.createLibraryRoot(name, path); await listLibraryRoots(); dispatch({ type: "announce", message: "Library root created." }); } catch (error) { setError(error); }
+  const createLibraryRoot = useCallback(async (label: string, rootPath: string) => {
+    try { await bridge.createLibraryRoot(label, rootPath); await listLibraryRoots(); dispatch({ type: "announce", message: "Library root created." }); } catch (error) { setError(error); }
   }, [bridge, listLibraryRoots, setError]);
 
-  const updateLibraryRoot = useCallback(async (id: number, patch: { name?: string; path?: string; enabled?: boolean }) => {
+  const updateLibraryRoot = useCallback(async (id: string, patch: { label?: string; rootPath?: string }) => {
     try { await bridge.updateLibraryRoot(id, patch); await listLibraryRoots(); dispatch({ type: "announce", message: "Library root updated." }); } catch (error) { setError(error); }
   }, [bridge, listLibraryRoots, setError]);
 
-  const deleteLibraryRoot = useCallback(async (id: number) => {
+  const deleteLibraryRoot = useCallback(async (id: string) => {
     try { await bridge.deleteLibraryRoot(id); await listLibraryRoots(); dispatch({ type: "announce", message: "Library root deleted." }); } catch (error) { setError(error); }
   }, [bridge, listLibraryRoots, setError]);
 
@@ -722,19 +759,19 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     try { await bridge.createTag(name, color); await listTags(); dispatch({ type: "announce", message: "Tag created." }); } catch (error) { setError(error); }
   }, [bridge, listTags, setError]);
 
-  const updateTag = useCallback(async (id: number, patch: { name?: string; color?: string }) => {
+  const updateTag = useCallback(async (id: string, patch: { name?: string; color?: string }) => {
     try { await bridge.updateTag(id, patch); await listTags(); dispatch({ type: "announce", message: "Tag updated." }); } catch (error) { setError(error); }
   }, [bridge, listTags, setError]);
 
-  const deleteTag = useCallback(async (id: number) => {
+  const deleteTag = useCallback(async (id: string) => {
     try { await bridge.deleteTag(id); await listTags(); dispatch({ type: "announce", message: "Tag deleted." }); } catch (error) { setError(error); }
   }, [bridge, listTags, setError]);
 
-  const assignTagToItem = useCallback(async (itemId: string, tagId: number) => {
+  const assignTagToItem = useCallback(async (itemId: string, tagId: string) => {
     try { await bridge.assignTagToItem(itemId, tagId); dispatch({ type: "announce", message: "Tag assigned." }); } catch (error) { setError(error); }
   }, [bridge, setError]);
 
-  const removeTagFromItem = useCallback(async (itemId: string, tagId: number) => {
+  const removeTagFromItem = useCallback(async (itemId: string, tagId: string) => {
     try { await bridge.removeTagFromItem(itemId, tagId); dispatch({ type: "announce", message: "Tag removed." }); } catch (error) { setError(error); }
   }, [bridge, setError]);
 
@@ -746,23 +783,23 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     try { await bridge.createCollection(name, description); await listCollections(); dispatch({ type: "announce", message: "Collection created." }); } catch (error) { setError(error); }
   }, [bridge, listCollections, setError]);
 
-  const updateCollection = useCallback(async (id: number, patch: { name?: string; description?: string }) => {
+  const updateCollection = useCallback(async (id: string, patch: { name?: string; description?: string }) => {
     try { await bridge.updateCollection(id, patch); await listCollections(); dispatch({ type: "announce", message: "Collection updated." }); } catch (error) { setError(error); }
   }, [bridge, listCollections, setError]);
 
-  const deleteCollection = useCallback(async (id: number) => {
+  const deleteCollection = useCallback(async (id: string) => {
     try { await bridge.deleteCollection(id); await listCollections(); dispatch({ type: "announce", message: "Collection deleted." }); } catch (error) { setError(error); }
   }, [bridge, listCollections, setError]);
 
-  const addItemsToCollection = useCallback(async (collectionId: number, itemIds: string[]) => {
+  const addItemsToCollection = useCallback(async (collectionId: string, itemIds: string[]) => {
     try { await bridge.addItemsToCollection(collectionId, itemIds); dispatch({ type: "announce", message: "Items added to collection." }); } catch (error) { setError(error); }
   }, [bridge, setError]);
 
-  const removeItemsFromCollection = useCallback(async (collectionId: number, itemIds: string[]) => {
+  const removeItemsFromCollection = useCallback(async (collectionId: string, itemIds: string[]) => {
     try { await bridge.removeItemsFromCollection(collectionId, itemIds); dispatch({ type: "announce", message: "Items removed from collection." }); } catch (error) { setError(error); }
   }, [bridge, setError]);
 
-  const bulkTagItems = useCallback(async (itemIds: string[], tagId: number) => {
+  const bulkTagItems = useCallback(async (itemIds: string[], tagId: string) => {
     try { await bridge.bulkTagItems(itemIds, tagId); dispatch({ type: "announce", message: `Tagged ${itemIds.length} items.` }); } catch (error) { setError(error); }
   }, [bridge, setError]);
 
@@ -773,7 +810,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
   const findDuplicatesBySha256 = useCallback(async () => {
     try {
       const groups = await bridge.findDuplicatesBySha256();
-      const count = groups.filter((g) => g.items.length > 1).length;
+      const count = groups.filter((group) => group.count > 1).length;
       dispatch({ type: "announce", message: count ? `Found ${count} duplicate groups.` : "No duplicates found." });
     } catch (error) { setError(error); }
   }, [bridge, setError]);
@@ -785,11 +822,11 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     } catch (error) { setError(error); }
   }, [bridge, setError]);
 
-  const toggleTagSelection = useCallback((tagId: number) => {
+  const toggleTagSelection = useCallback((tagId: string) => {
     dispatch({ type: "toggleTagSelection", tagId });
   }, []);
 
-  const selectCollection = useCallback((collectionId: number | null) => {
+  const selectCollection = useCallback((collectionId: string | null) => {
     dispatch({ type: "selectCollection", collectionId });
   }, []);
 
@@ -870,6 +907,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     selectedLibraryItem: selectSelectedLibraryItem(state),
     bridgeMode: bridge.mode,
     updater,
+    stemEngine,
     setRoute: (route) => dispatch({ type: "setRoute", route }),
     selectJob: (itemId) => dispatch({ type: "selectItem", itemId }),
     selectLibraryItem: (itemId) => dispatch({ type: "selectLibraryItem", itemId }),
@@ -898,6 +936,8 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     refreshDiagnostics,
     exportDiagnostics,
     prepareEngine,
+    prepareStemEngine,
+    separateLibraryItemStems,
     checkForUpdates,
     installUpdate,
     loadPreview,
@@ -934,6 +974,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
   }), [
     addLocalPaths, addUrls, bridge, cancelItem, checkForUpdates, chooseOutputDirectory, clearCompleted, enqueueAllReady,
     enqueueItem, exportDiagnostics, importFiles, installUpdate, loadPreview, moveItem, openSource, prepareEngine,
+    prepareStemEngine, separateLibraryItemStems, stemEngine,
     refreshDiagnostics, refreshFilename, refreshLibrary, releasePreview, removeItem, removeLibraryItem,
     reexportLibraryItem, retryItem, revealPath, saveQueuedItem, saveSettings, setQueuePaused, state,
     updateItem, updateMetadata, updater,
