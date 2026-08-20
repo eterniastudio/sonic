@@ -26,7 +26,9 @@ use crate::{
         LibraryItem, QueueJob, RecoveryReport, SettingsPatch, SourceSpec, JOB_UPDATED_EVENT,
         LEGACY_PROGRESS_EVENT, QUEUE_UPDATED_EVENT,
     },
-    presets::{ffmpeg_transcode_args, validate_export, validate_metadata},
+    presets::{
+        ffmpeg_transcode_args, validate_export, validate_metadata, validate_output_contract,
+    },
     sidecar::{build_sidecar, read_sidecar, write_sidecar, SidecarBuild, SonicSidecar, TagStatus},
     storage::{now_ms, Repository},
     tools::{
@@ -308,6 +310,7 @@ impl AppState {
             None,
         )?;
         let output_probe = probe_audio(app, &staged_audio)?;
+        validate_output_contract(detail.request.export.preset_id, &output_probe.audio)?;
         let output_hash = sha256_file(&staged_audio)?;
         let tag_status = verify_tag_readback(&detail.request, &output_probe.tags);
         let library_item_id = Uuid::new_v4().to_string();

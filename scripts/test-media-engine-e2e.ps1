@@ -422,7 +422,7 @@ function Assert-RegularWorkspaceFile {
   return $item
 }
 
-if ($env:OS -cne 'Windows_NT') {
+if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
   throw 'Sonic media-engine E2E currently supports Windows only.'
 }
 
@@ -744,6 +744,142 @@ try {
     throw "The transcoded output duration $duration seconds exceeded its bounded sample window."
   }
 
+  $presetMatrix = @(
+    [pscustomobject]@{
+      Name = 'MP3 320'
+      Extension = 'mp3'
+      Codec = 'mp3'
+      Format = 'mp3'
+      SampleRate = 0
+      BitDepth = 0
+      CodecArguments = @('-c:a', 'libmp3lame', '-b:a', '320k', '-id3v2_version', '3')
+    },
+    [pscustomobject]@{
+      Name = 'M4A AAC 256'
+      Extension = 'm4a'
+      Codec = 'aac'
+      Format = 'm4a'
+      SampleRate = 0
+      BitDepth = 0
+      CodecArguments = @('-c:a', 'aac', '-b:a', '256k', '-movflags', '+faststart')
+    },
+    [pscustomobject]@{
+      Name = 'WAV 44.1/24'
+      Extension = 'wav'
+      Codec = 'pcm_s24le'
+      Format = 'wav'
+      SampleRate = 44100
+      BitDepth = 24
+      CodecArguments = @('-c:a', 'pcm_s24le', '-ar', '44100')
+    },
+    [pscustomobject]@{
+      Name = 'WAV 48/24'
+      Extension = 'wav'
+      Codec = 'pcm_s24le'
+      Format = 'wav'
+      SampleRate = 48000
+      BitDepth = 24
+      CodecArguments = @('-c:a', 'pcm_s24le', '-ar', '48000')
+    },
+    [pscustomobject]@{
+      Name = 'FLAC'
+      Extension = 'flac'
+      Codec = 'flac'
+      Format = 'flac'
+      SampleRate = 0
+      BitDepth = 0
+      CodecArguments = @('-c:a', 'flac', '-compression_level', '8')
+    },
+    [pscustomobject]@{
+      Name = 'Opus 192'
+      Extension = 'opus'
+      Codec = 'opus'
+      Format = 'ogg'
+      SampleRate = 48000
+      BitDepth = 0
+      CodecArguments = @('-c:a', 'libopus', '-b:a', '192k', '-vbr', 'on')
+    }
+  )
+  $verifiedPresets = @('MP3 V0')
+  foreach ($preset in $presetMatrix) {
+    $safeName = $preset.Name.ToLowerInvariant() -replace '[^a-z0-9]+', '-'
+    $presetOutput = Join-Path $safeWorkspace ($safeName.Trim('-') + '.' + $preset.Extension)
+    $presetArguments = @(
+      '-nostdin',
+      '-hide_banner',
+      '-y',
+      '-i',
+      $sourceFile.FullName,
+      '-t',
+      $SampleSeconds.ToString([Globalization.CultureInfo]::InvariantCulture),
+      '-map',
+      '0:a:0',
+      '-vn',
+      '-map_metadata',
+      '-1'
+    ) + $preset.CodecArguments + @(
+      '-metadata',
+      ('title=' + $expectedTags.TITLE),
+      '-metadata',
+      ('artist=' + $expectedTags.ARTIST),
+      '-metadata',
+      ('TBPM=' + $expectedTags.TBPM),
+      '-metadata',
+      ('TKEY=' + $expectedTags.TKEY),
+      '-progress',
+      'pipe:1',
+      '-nostats',
+      $presetOutput
+    )
+    $presetTranscode = Invoke-DirectProcess `
+      -FilePath $ffmpeg `
+      -Arguments $presetArguments `
+      -WorkingDirectory $safeWorkspace `
+      -PathValue $mediaPath `
+      -MaximumSeconds 90 `
+      -Description ("$($preset.Name) preset transcode")
+    if (($presetTranscode.Stdout + "`n" + $presetTranscode.Stderr) -cnotmatch '(?m)^progress=end\s*$') {
+      throw "$($preset.Name) completed without its final progress=end record."
+    }
+    $presetFile = Assert-RegularWorkspaceFile `
+      -Path $presetOutput `
+      -ExpectedParent $safeWorkspace `
+      -MaximumBytes 134217728 `
+      -Description ("$($preset.Name) output")
+    $presetProbeArguments = @(
+      '-v',
+      'error',
+      '-show_entries',
+      'format=format_name,duration,size:format_tags:stream=codec_type,codec_name,sample_rate,channels,bits_per_sample,bits_per_raw_sample,duration:stream_tags',
+      '-of',
+      'json',
+      '--',
+      $presetFile.FullName
+    )
+    $presetProbe = Invoke-DirectProcess `
+      -FilePath $ffprobe `
+      -Arguments $presetProbeArguments `
+      -WorkingDirectory $safeWorkspace `
+      -PathValue $mediaPath `
+      -MaximumSeconds 30 `
+      -Description ("$($preset.Name) ffprobe contract check")
+    $presetData = $presetProbe.Stdout | ConvertFrom-Json
+    $presetStream = @($presetData.streams | Where-Object { $_.codec_type -ceq 'audio' }) | Select-Object -First 1
+    if ($null -eq $presetStream -or [string]$presetStream.codec_name -cne [string]$preset.Codec) {
+      throw "$($preset.Name) emitted codec '$($presetStream.codec_name)' instead of '$($preset.Codec)'."
+    }
+    if ([string]$presetData.format.format_name -notmatch ('(?:^|,)' + [regex]::Escape([string]$preset.Format) + '(?:,|$)')) {
+      throw "$($preset.Name) emitted container '$($presetData.format.format_name)' instead of '$($preset.Format)'."
+    }
+    if ($preset.SampleRate -gt 0 -and [int]$presetStream.sample_rate -ne [int]$preset.SampleRate) {
+      throw "$($preset.Name) emitted $($presetStream.sample_rate) Hz instead of $($preset.SampleRate) Hz."
+    }
+    if ($preset.BitDepth -gt 0 -and [int]$presetStream.bits_per_raw_sample -ne [int]$preset.BitDepth) {
+      throw "$($preset.Name) emitted $($presetStream.bits_per_raw_sample)-bit instead of $($preset.BitDepth)-bit audio."
+    }
+    $verifiedPresets += $preset.Name
+  }
+
   $outputHash = Get-Sha256 -File $outputFile.FullName
   $lastProgress = $progressRecords[$progressRecords.Count - 1]
   Write-Host "Sonic media-engine E2E passed."
@@ -753,6 +889,7 @@ try {
   Write-Host "Acquisition  $($sourceFile.Name), $($sourceFile.Length) bytes, $($progressRecords.Count) progress record(s), 1 output record"
   Write-Host "Progress     $lastProgress"
   Write-Host "Readback     title='$($tagMap.TITLE)', artist='$($tagMap.ARTIST)', TBPM=$($tagMap.TBPM), TKEY='$($tagMap.TKEY)'"
+  Write-Host "Presets      $($verifiedPresets -join ' | ')"
   Write-Host "Sample       $([Math]::Round($duration, 3))s, $($outputFile.Length) bytes, SHA-256 $outputHash"
 } finally {
   Remove-SafeTempWorkspace -Path $workspace -AllowedParent $tempRoot

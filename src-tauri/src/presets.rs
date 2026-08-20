@@ -2,7 +2,9 @@ use std::path::Path;
 
 use crate::{
     error::{invalid, AppResult},
-    models::{ChannelMode, ExportPreset, ExportPresetId, ExportSpec, FinalMetadata},
+    models::{
+        AudioProperties, ChannelMode, ExportPreset, ExportPresetId, ExportSpec, FinalMetadata,
+    },
 };
 
 pub fn export_presets() -> Vec<ExportPreset> {
@@ -291,9 +293,70 @@ fn number(value: f64) -> String {
     }
 }
 
+pub fn validate_output_contract(preset: ExportPresetId, audio: &AudioProperties) -> AppResult<()> {
+    let container = audio.container.as_deref().unwrap_or("");
+    let codec = audio.codec.as_deref().unwrap_or("");
+    let has_container = |expected: &str| {
+        container
+            .split(',')
+            .any(|value| value.trim().eq_ignore_ascii_case(expected))
+    };
+    let matches = match preset {
+        ExportPresetId::Original => !codec.is_empty(),
+        ExportPresetId::Mp3V0 | ExportPresetId::Mp3Cbr320 => {
+            has_container("mp3") && codec.eq_ignore_ascii_case("mp3")
+        }
+        ExportPresetId::M4aAac256 => {
+            (has_container("m4a") || has_container("mp4") || has_container("mov"))
+                && codec.eq_ignore_ascii_case("aac")
+        }
+        ExportPresetId::Wav44100S24 => {
+            has_container("wav")
+                && codec.eq_ignore_ascii_case("pcm_s24le")
+                && audio.sample_rate_hz == Some(44_100)
+                && audio.bit_depth == Some(24)
+        }
+        ExportPresetId::Wav48000S24 => {
+            has_container("wav")
+                && codec.eq_ignore_ascii_case("pcm_s24le")
+                && audio.sample_rate_hz == Some(48_000)
+                && audio.bit_depth == Some(24)
+        }
+        ExportPresetId::Flac => has_container("flac") && codec.eq_ignore_ascii_case("flac"),
+        ExportPresetId::Opus192 => {
+            (has_container("ogg") || has_container("opus"))
+                && codec.eq_ignore_ascii_case("opus")
+                && audio.sample_rate_hz == Some(48_000)
+        }
+    };
+    if matches {
+        return Ok(());
+    }
+
+    let label = export_presets()
+        .into_iter()
+        .find(|candidate| candidate.id == preset)
+        .map(|candidate| candidate.label)
+        .unwrap_or_else(|| format!("{preset:?}"));
+    Err(invalid(format!(
+        "The {label} export did not match its output contract (container: {}; codec: {}; sample rate: {} Hz; bit depth: {}).",
+        if container.is_empty() { "unknown" } else { container },
+        if codec.is_empty() { "unknown" } else { codec },
+        audio
+            .sample_rate_hz
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "unknown".into()),
+        audio
+            .bit_depth
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "unknown".into())
+    )))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::AudioProperties;
 
     fn metadata() -> FinalMetadata {
         FinalMetadata {
@@ -353,5 +416,97 @@ mod tests {
         assert!(validate_metadata(&invalid).is_err());
         invalid.bpm = Some(401.0);
         assert!(validate_metadata(&invalid).is_err());
+    }
+
+    #[test]
+    fn validates_the_real_output_contract_for_every_preset() {
+        let cases = [
+            (
+                ExportPresetId::Mp3V0,
+                AudioProperties {
+                    container: Some("mp3".into()),
+                    codec: Some("mp3".into()),
+                    ..Default::default()
+                },
+            ),
+            (
+                ExportPresetId::Mp3Cbr320,
+                AudioProperties {
+                    container: Some("mp3".into()),
+                    codec: Some("mp3".into()),
+                    ..Default::default()
+                },
+            ),
+            (
+                ExportPresetId::M4aAac256,
+                AudioProperties {
+                    container: Some("mov,mp4,m4a,3gp,3g2,mj2".into()),
+                    codec: Some("aac".into()),
+                    ..Default::default()
+                },
+            ),
+            (
+                ExportPresetId::Wav44100S24,
+                AudioProperties {
+                    container: Some("wav".into()),
+                    codec: Some("pcm_s24le".into()),
+                    sample_rate_hz: Some(44_100),
+                    bit_depth: Some(24),
+                    ..Default::default()
+                },
+            ),
+            (
+                ExportPresetId::Wav48000S24,
+                AudioProperties {
+                    container: Some("wav".into()),
+                    codec: Some("pcm_s24le".into()),
+                    sample_rate_hz: Some(48_000),
+                    bit_depth: Some(24),
+                    ..Default::default()
+                },
+            ),
+            (
+                ExportPresetId::Flac,
+                AudioProperties {
+                    container: Some("flac".into()),
+                    codec: Some("flac".into()),
+                    ..Default::default()
+                },
+            ),
+            (
+                ExportPresetId::Opus192,
+                AudioProperties {
+                    container: Some("ogg".into()),
+                    codec: Some("opus".into()),
+                    sample_rate_hz: Some(48_000),
+                    ..Default::default()
+                },
+            ),
+        ];
+
+        for (preset, audio) in cases {
+            assert!(
+                validate_output_contract(preset, &audio).is_ok(),
+                "valid contract rejected for {preset:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_successful_ffmpeg_output_that_does_not_match_the_preset() {
+        let wrong_wav = AudioProperties {
+            container: Some("wav".into()),
+            codec: Some("pcm_s16le".into()),
+            sample_rate_hz: Some(48_000),
+            bit_depth: Some(16),
+            ..Default::default()
+        };
+        let error = validate_output_contract(ExportPresetId::Wav44100S24, &wrong_wav)
+            .unwrap_err()
+            .public_message();
+
+        assert!(error.contains("WAV 44.1 kHz / 24-bit"));
+        assert!(error.contains("pcm_s16le"));
+        assert!(error.contains("48000 Hz"));
     }
 }
