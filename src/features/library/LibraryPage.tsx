@@ -13,7 +13,6 @@ import { useSonic } from "../../app/SonicProvider";
 import { formatBytes, formatDuration, shortPath } from "../../domain/format";
 import type { LibraryFilters, LibrarySort } from "../../domain/types";
 import { requestNextLibraryPage } from "../../services/library-pagination";
-import "../../styles/library-pagination.css";
 
 const EMPTY_FILTERS: LibraryFilters = { format: "", key: "", bpmMin: "", bpmMax: "", missingOnly: false };
 
@@ -136,7 +135,7 @@ export function LibraryPage() {
               ))}
             </div>
             {state.libraryNextCursor ? (
-              <div className="library-pagination">
+              <div className="source-actions" style={{ marginTop: 12 }}>
                 <button type="button" disabled={loadingMore} onClick={() => void loadMore()}>
                   {loadingMore ? "Loading more…" : `Load more (${items.length} of ${totalCount})`}
                 </button>
