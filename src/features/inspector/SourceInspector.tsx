@@ -61,7 +61,7 @@ export function SourceInspector() {
       <aside className="inspector-panel inspector-empty" aria-label="Source inspector">
         <Waveform size={32} aria-hidden="true" />
         <h2>Select a track</h2>
-        <p>Choose a track to edit its metadata and export settings.</p>
+        <p>Edit track details and export settings here.</p>
       </aside>
     );
   }
@@ -87,7 +87,7 @@ export function SourceInspector() {
           </div>
           <div>
             <span>{inspection?.sourceLabel ?? (item.source.kind === "youtube" ? "YouTube" : item.source.kind === "soundcloud" ? "SoundCloud" : "Local file")}</span>
-            <h2 id="inspector-title">{inspection?.title ?? "Inspecting source"}</h2>
+            <h2 id="inspector-title">{inspection?.title ?? "Reading track"}</h2>
             <p>{inspection?.creator ?? "No artist listed"}</p>
           </div>
           <span className={`state-chip state-${item.status}`}>{statusLabel(item.status)}</span>
@@ -99,22 +99,22 @@ export function SourceInspector() {
             {inspection.codec ? <span>{inspection.codec}</span> : null}
             {inspection.audio.sampleRateHz ? <span>{Math.round(inspection.audio.sampleRateHz / 100) / 10} kHz</span> : null}
             {inspection.fileSizeBytes ? <span>{formatBytes(inspection.fileSizeBytes)}</span> : null}
-            {hasTextTagMatches ? <span>{confidence}% text/tag match confidence</span> : null}
-            {detectedTempo ? <span>{Math.round(detectedTempo.confidence * 100)}% tempo confidence</span> : null}
+            {hasTextTagMatches ? <span>{confidence}% tag match</span> : null}
+            {detectedTempo ? <span>{Math.round(detectedTempo.confidence * 100)}% BPM confidence</span> : null}
           </div>
         ) : null}
 
         {item.status === "inspecting" ? (
           <div className="inspector-loading" role="status">
             <CircleNotch className="spin" size={19} aria-hidden="true" />
-            <div><strong>Checking the source</strong><span>Reading the title, description, file tags, and format details.</span></div>
+            <div><strong>Reading track</strong><span>Getting the title, tags, and format.</span></div>
           </div>
         ) : null}
 
         {item.error ? (
           <div className="inline-alert is-error" role="alert">
             <Check size={17} weight="bold" aria-hidden="true" />
-            <div><strong>{item.errorCode ?? "Couldn’t inspect this source"}</strong><span>{item.error}</span></div>
+            <div><strong>{item.errorCode ?? "Couldn’t read this track"}</strong><span>{item.error}</span></div>
           </div>
         ) : null}
 
@@ -122,7 +122,7 @@ export function SourceInspector() {
           <>
             <section className="inspector-section" aria-labelledby="metadata-heading">
               <div className="section-title-row">
-                <div><span className="eyebrow">Metadata</span><h3 id="metadata-heading">Check the details</h3></div>
+                <div><span className="eyebrow">Track info</span><h3 id="metadata-heading">Track details</h3></div>
                 <button
                   className="reset-metadata"
                   type="button"
@@ -137,26 +137,26 @@ export function SourceInspector() {
                     camelot: inspection.suggestedMetadata.camelot,
                     tuningHz: inspection.suggestedMetadata.tuningHz,
                   })}
-                >Reset to suggestions</button>
+                >Use detected values</button>
               </div>
 
-              <div className="metadata-provenance" aria-label="Metadata source comparison">
-                <div><span>Declared text</span><strong>{metadataSummary(inspection.declaredMetadata)}</strong></div>
-                <div><span>Embedded tags</span><strong>{metadataSummary(inspection.embeddedMetadata)}</strong></div>
+              <div className="metadata-provenance" aria-label="Where track details came from">
+                <div><span>Link text</span><strong>{metadataSummary(inspection.declaredMetadata)}</strong></div>
+                <div><span>File tags</span><strong>{metadataSummary(inspection.embeddedMetadata)}</strong></div>
                 <div className={detectedTempo ? "" : "is-audio-unavailable"}>
-                  <span>Audio signal</span>
+                  <span>Audio scan</span>
                   <strong>{detectedTempo || detectedKey
                     ? [
                         detectedTempo ? `${detectedTempo.primary} BPM` : null,
                         detectedKey ? `${detectedKey.primary} · ${detectedKey.camelot}` : null,
                       ].filter(Boolean).join(" · ")
-                    : "No reliable tempo or key detected"}</strong>
+                    : "No clear tempo or key"}</strong>
                 </div>
-                <div className="is-final"><span>Final for export</span><strong>{metadataSummary({ bpm: Number(item.metadata.bpm) || undefined, key: item.metadata.key || undefined, detuneCents: Number(item.metadata.detuneCents) || undefined })}</strong></div>
-                <b>{detectedTempo || detectedKey ? "Reliable audio analysis fills only blank values" : hasTextTagMatches ? `${confidence}% text/tag match confidence` : "No metadata match"}</b>
+                <div className="is-final"><span>Export values</span><strong>{metadataSummary({ bpm: Number(item.metadata.bpm) || undefined, key: item.metadata.key || undefined, detuneCents: Number(item.metadata.detuneCents) || undefined })}</strong></div>
+                <b>{detectedTempo || detectedKey ? "Detected values fill empty fields only" : hasTextTagMatches ? `${confidence}% tag match` : "No values found"}</b>
               </div>
               <p className="metadata-boundary-note">
-                Tempo analysis runs locally. A reliable detected BPM fills only a blank value; your edits always win.
+                Analysis runs on this device. It fills empty fields and never replaces your edits.
               </p>
 
               <div className="text-field-grid">
@@ -166,7 +166,7 @@ export function SourceInspector() {
                 </label>
                 <label className="field span-two">
                   <span>Artist / producer</span>
-                  <input value={item.metadata.artist ?? ""} disabled={locked} onChange={(event) => updateMetadata(item.id, { artist: event.target.value })} placeholder="Not declared" />
+                  <input value={item.metadata.artist ?? ""} disabled={locked} onChange={(event) => updateMetadata(item.id, { artist: event.target.value })} placeholder="Not set" />
                 </label>
                 <label className="field metric-field">
                   <span>Tempo</span>
@@ -193,7 +193,7 @@ export function SourceInspector() {
 
               {inspection.suggestedMetadata.alternateBpms.length ? (
                 <div className="alternate-values">
-                  <span>{detectedTempo ? "Other detected tempo interpretations" : "Other declared BPM values"}</span>
+                  <span>{detectedTempo ? "Other possible tempos" : "Other BPM values"}</span>
                   {inspection.suggestedMetadata.alternateBpms.map((bpm) => (
                     <button type="button" key={bpm} disabled={locked} onClick={() => updateMetadata(item.id, { bpm: bpm.toString() })}>{bpm} BPM</button>
                   ))}
@@ -216,7 +216,7 @@ export function SourceInspector() {
 
               <details className="evidence-disclosure">
                 <summary>
-                  <span><strong>Metadata evidence</strong><small>{inspection.suggestedMetadata.matches.length} {inspection.suggestedMetadata.matches.length === 1 ? "match" : "matches"}</small></span>
+                  <span><strong>Where values came from</strong><small>{inspection.suggestedMetadata.matches.length} {inspection.suggestedMetadata.matches.length === 1 ? "source" : "sources"}</small></span>
                   <span aria-hidden="true">▾</span>
                 </summary>
                 <div className="evidence-table">
@@ -226,7 +226,7 @@ export function SourceInspector() {
                       <strong>{match.rawText}</strong>
                       <small>{match.source} · {Math.round(match.confidence * 100)}%</small>
                     </div>
-                  )) : <p>No BPM, key, or tuning values were found. Enter them above.</p>}
+                  )) : <p>No BPM, key, or tuning found. Enter values above.</p>}
                 </div>
               </details>
             </section>
@@ -326,11 +326,11 @@ export function SourceInspector() {
       <footer className="inspector-action">
         <div>
           <span>{statusLabel(item.status)}</span>
-          <strong>{item.progress.message ?? selectedPreset?.name ?? "Check before exporting"}</strong>
+          <strong>{item.progress.message ?? selectedPreset?.name ?? "Ready to export"}</strong>
         </div>
         {item.status === "review" ? (
           <button className="primary-action" type="button" onClick={() => void enqueueItem(item.id)} disabled={!item.outputDirectory || inspection?.isLive}>
-            <DownloadSimple size={19} weight="bold" aria-hidden="true" /> Confirm metadata &amp; add to queue
+            <DownloadSimple size={19} weight="bold" aria-hidden="true" /> Add to export queue
           </button>
         ) : item.status === "queued" ? (
           <button className="primary-action" type="button" onClick={() => void saveQueuedItem(item.id)}>

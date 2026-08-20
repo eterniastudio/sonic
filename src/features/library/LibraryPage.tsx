@@ -51,7 +51,7 @@ export function LibraryPage() {
     <main className="library-layout" aria-labelledby="library-heading">
       <section className="library-workspace">
         <header className="page-heading">
-          <div><span className="eyebrow">On this computer</span><h1 id="library-heading">Library</h1><p>Find and play files you’ve exported with Sonic.</p></div>
+          <div><span className="eyebrow">Saved tracks</span><h1 id="library-heading">Library</h1><p>Play, split, or export tracks again.</p></div>
           <span className="page-count">{items.length} {items.length === 1 ? "track" : "tracks"}</span>
         </header>
 
@@ -59,7 +59,7 @@ export function LibraryPage() {
           <label className="search-field">
             <MagnifyingGlass size={18} aria-hidden="true" />
             <span className="sr-only">Search beat library</span>
-            <input id="library-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title, producer, key, BPM, or filename" />
+            <input id="library-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title, artist, key, BPM, or file name" />
             {query ? <button type="button" onClick={() => setQuery("")} aria-label="Clear library search">×</button> : null}
           </label>
           <button className={filtersOpen ? "is-active" : ""} type="button" onClick={() => setFiltersOpen((open) => !open)} aria-expanded={filtersOpen}>
@@ -111,7 +111,7 @@ export function LibraryPage() {
             ))}
           </div>
         ) : (
-          <div className="library-empty"><MagnifyingGlass size={31} aria-hidden="true" /><h2>{hasFilters ? "No matches" : "Your library is empty"}</h2><p>{hasFilters ? "Try a different search or clear your filters." : "Finished exports will appear here."}</p></div>
+          <div className="library-empty"><MagnifyingGlass size={31} aria-hidden="true" /><h2>{hasFilters ? "No matches" : "No saved tracks"}</h2><p>{hasFilters ? "Try another search or clear the filters." : "Finished exports appear here."}</p></div>
         )}
       </section>
 
@@ -122,7 +122,7 @@ export function LibraryPage() {
             <span className="eyebrow">{selected.sourceLabel}</span>
             <h2>{selected.title}</h2>
             <p className="detail-creator">{selected.creator ?? "No artist listed"}</p>
-            {!selected.exists ? <div className="inline-alert is-error"><WarningCircle size={17} weight="fill" aria-hidden="true" /><span>Sonic can’t find this file. It may have been moved or deleted.</span></div> : null}
+            {!selected.exists ? <div className="inline-alert is-error"><WarningCircle size={17} weight="fill" aria-hidden="true" /><span>File not found. It may have been moved or deleted.</span></div> : null}
             <dl className="detail-metrics">
               <div><dt>Tempo</dt><dd>{selected.bpm ? `${selected.bpm} BPM` : "—"}</dd></div>
               <div><dt>Key</dt><dd>{selected.key ?? "—"}</dd></div>
@@ -136,17 +136,17 @@ export function LibraryPage() {
               <button className="primary-action" type="button" disabled={!selected.exists} onClick={() => void loadPreview(selected)}><Play size={17} weight="fill" aria-hidden="true" /> Play</button>
               <button type="button" disabled={!selected.exists} onClick={() => void revealPath(selected.outputPath)}><FolderOpen size={17} aria-hidden="true" /> Show in folder</button>
               <button type="button" onClick={() => void reexportLibraryItem(selected.id)}><ArrowClockwise size={17} aria-hidden="true" /> Export again</button>
-              <button type="button" disabled={!selected.exists || separatingId === selected.id} onClick={async () => { setSeparatingId(selected.id); try { await separateLibraryItemStems(selected.id); } finally { setSeparatingId(null); } }}><Waveform size={17} aria-hidden="true" /> {separatingId === selected.id ? "Separating…" : "Create 4 stems"}</button>
+              <button type="button" disabled={!selected.exists || separatingId === selected.id} onClick={async () => { setSeparatingId(selected.id); try { await separateLibraryItemStems(selected.id); } finally { setSeparatingId(null); } }}><Waveform size={17} aria-hidden="true" /> {separatingId === selected.id ? "Splitting…" : "Split into 4 stems"}</button>
               <button type="button" onClick={() => void openSource(selected.source)}><FileAudio size={17} aria-hidden="true" /> Open original</button>
             </div>
             <button className="destructive-text" type="button" onClick={() => {
               if (window.confirm("Remove this track from the Library? The audio file won’t be deleted.")) void removeLibraryItem(selected.id, false);
             }}><Trash size={15} aria-hidden="true" /> Remove from Library</button>
             {selected.exists ? <button className="destructive-text delete-audio" type="button" onClick={() => {
-              if (window.confirm(`Permanently delete “${selected.title}” and its Sonic sidecar from disk? This cannot be undone.`)) void removeLibraryItem(selected.id, true);
-            }}><Trash size={15} weight="fill" aria-hidden="true" /> Delete file and sidecar</button> : null}
+              if (window.confirm(`Delete “${selected.title}” and its metadata file? This cannot be undone.`)) void removeLibraryItem(selected.id, true);
+            }}><Trash size={15} weight="fill" aria-hidden="true" /> Delete audio and metadata</button> : null}
           </>
-        ) : <div className="detail-empty"><FileAudio size={30} aria-hidden="true" /><h2>Select a track</h2><p>Its details and file actions will appear here.</p></div>}
+        ) : <div className="detail-empty"><FileAudio size={30} aria-hidden="true" /><h2>Select a track</h2><p>Track details and file actions appear here.</p></div>}
       </aside>
     </main>
   );

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,9 +23,9 @@ describe("Sonic application shell", () => {
     expect(await screen.findByRole("button", { name: /sonic session/i })).toBeInTheDocument();
     expect(screen.getByRole("main")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^ready$/i })).toBeInTheDocument();
-    expect(screen.getAllByText(/audio signal/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/tempo analysis runs locally/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /confirm metadata & add to queue/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/audio scan/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/analysis runs on this device/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add to export queue/i })).toBeInTheDocument();
     expect(screen.queryByText(/^\d+% match confidence$/i)).not.toBeInTheDocument();
 
     const results = await axe.run(container, {
@@ -59,18 +59,18 @@ describe("Sonic application shell", () => {
       .toBeInTheDocument();
   });
 
-  it("offers the walkthrough on first boot and opens the command palette from the keyboard", async () => {
+  it("offers the tutorial on first boot and opens quick actions from the keyboard", async () => {
     localStorage.removeItem("sonic:tutorial-complete");
     const user = userEvent.setup();
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: /bring in the track/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /^add audio$/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^skip$/i }));
     expect(localStorage.getItem("sonic:tutorial-complete")).toBe("1");
 
     await user.keyboard("{Control>}k{/Control}");
-    expect(screen.getByRole("heading", { name: /go to a sonic action/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /open library/i })).toBeInTheDocument();
+    const quickActions = screen.getByRole("dialog", { name: /quick actions/i });
+    expect(within(quickActions).getByRole("button", { name: /^library/i })).toBeInTheDocument();
   });
 
   it("cancels a queued native job instead of offering an invalid remove action", async () => {
@@ -135,7 +135,7 @@ describe("Sonic application shell", () => {
     await screen.findByText("In Library");
     await user.click(screen.getByRole("button", { name: /clear finished/i }));
 
-    expect((await screen.findAllByText(/1 finished track is still linked to the Library/i)).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/1 finished track stays in Library/i)).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Archive.wav").length).toBeGreaterThan(0);
     expect(screen.queryByText("Cancelled.wav")).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();

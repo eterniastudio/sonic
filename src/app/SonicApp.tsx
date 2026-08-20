@@ -10,28 +10,28 @@ import { SettingsPage } from "../features/settings/SettingsPage";
 import { useSonic } from "./SonicProvider";
 
 const ROUTE_LABELS = {
-  session: ["Session", "Add, review, and export"],
+  session: ["Session", "Download and export"],
   library: ["Library", "Your finished tracks"],
-  settings: ["Settings", "Files, exports, and updates"],
+  settings: ["Settings", "Files, formats, and updates"],
 } as const;
 
 const SHORTCUTS = [
-  ["Ctrl + K", "Open the command palette"],
-  ["Ctrl + L", "Focus the link field"],
+  ["Ctrl + K", "Open quick actions"],
+  ["Ctrl + L", "Jump to the link field"],
   ["Ctrl + O", "Choose audio files"],
   ["Ctrl + F", "Search the Library"],
   ["Space", "Play or pause the preview"],
   ["Alt + ↑ / ↓", "Move the selected queue item"],
   ["Ctrl + 1 / 2 / ,", "Switch Session, Library, or Settings"],
   ["?", "Show keyboard shortcuts"],
-  ["Esc", "Close the current overlay"],
+  ["Esc", "Close the open panel"],
 ];
 
 const TUTORIAL_STEPS = [
-  { eyebrow: "01 · Intake", title: "Bring in the track", copy: "Paste authorized YouTube or SoundCloud links, or choose local audio. Add several links at once—Sonic keeps each track in its own queue row." },
-  { eyebrow: "02 · Analyze", title: "Check what Sonic heard", copy: "Sonic reads declared tags and analyzes the audio locally for tempo and musical key. Reliable blank values are filled automatically; anything you edit stays authoritative." },
-  { eyebrow: "03 · Shape", title: "Choose an export or stems", copy: "Export MP3, M4A, WAV, FLAC, Opus, or the original. Optional four-stem processing creates vocals, drums, bass, and other without turning Sonic into a full DAW." },
-  { eyebrow: "04 · Keep", title: "Find it again", copy: "Finished tracks live in Library with their audio and .json metadata sidecar. Press Ctrl+K anytime to jump to the next action." },
+  { eyebrow: "Step 1 of 4", title: "Add audio", copy: "Paste YouTube or SoundCloud links, or choose audio files. You can add more than one link at a time." },
+  { eyebrow: "Step 2 of 4", title: "Review the details", copy: "Sonic detects BPM and key on this device. It fills empty fields and keeps your edits." },
+  { eyebrow: "Step 3 of 4", title: "Export or split stems", copy: "Choose an audio format, or split a finished track into vocals, drums, bass, and other." },
+  { eyebrow: "Step 4 of 4", title: "Use your Library", copy: "Find, play, split, or export finished tracks again. Press Ctrl+K for quick actions." },
 ] as const;
 
 function isTypingTarget(target: EventTarget | null) {
@@ -159,7 +159,7 @@ export function SonicApp() {
       <div className="boot-screen" role="status" aria-live="polite">
         <span className="boot-mark"><CircleNotch className="spin" size={29} aria-hidden="true" /></span>
         <strong>Opening Sonic</strong>
-        <span>Loading your last session…</span>
+        <span>Loading…</span>
       </div>
     );
   }
@@ -206,7 +206,7 @@ export function SonicApp() {
       {state.globalError ? (
         <div className="global-toast" role="alert" tabIndex={-1}>
           <WarningCircle size={20} weight="fill" aria-hidden="true" />
-          <div><strong>Couldn’t complete that</strong><span>{state.globalError}</span></div>
+          <div><strong>Action failed</strong><span>{state.globalError}</span></div>
           <button type="button" onClick={dismissError} aria-label="Dismiss error"><X size={17} aria-hidden="true" /></button>
         </div>
       ) : null}
@@ -216,12 +216,12 @@ export function SonicApp() {
       {commandPaletteOpen ? (
         <div className="modal-backdrop command-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCommandPaletteOpen(false); }}>
           <section className="command-palette" role="dialog" aria-modal="true" aria-labelledby="command-heading">
-            <header><Keyboard size={18} aria-hidden="true" /><h2 id="command-heading">Go to a Sonic action</h2><kbd>Esc</kbd></header>
+            <header><Keyboard size={18} aria-hidden="true" /><h2 id="command-heading">Quick actions</h2><kbd>Esc</kbd></header>
             <div className="command-list">
               <button autoFocus type="button" onClick={() => { setRoute("session"); setCommandPaletteOpen(false); requestAnimationFrame(() => document.getElementById("source-links")?.focus()); }}><span><HardDrives size={17} />Add links</span><kbd>Ctrl L</kbd></button>
               <button type="button" onClick={() => { void importFiles(); setCommandPaletteOpen(false); }}><span><HardDrives size={17} />Choose audio files</span><kbd>Ctrl O</kbd></button>
-              <button type="button" onClick={() => { setRoute("library"); setCommandPaletteOpen(false); }}><span><HardDrives size={17} />Open Library</span><kbd>Ctrl 2</kbd></button>
-              <button type="button" onClick={() => { setTutorialStep(0); setTutorialOpen(true); setCommandPaletteOpen(false); }}><span><Keyboard size={17} />Replay walkthrough</span></button>
+              <button type="button" onClick={() => { setRoute("library"); setCommandPaletteOpen(false); }}><span><HardDrives size={17} />Library</span><kbd>Ctrl 2</kbd></button>
+              <button type="button" onClick={() => { setTutorialStep(0); setTutorialOpen(true); setCommandPaletteOpen(false); }}><span><Keyboard size={17} />Replay tutorial</span></button>
               <button type="button" onClick={() => { setShortcutsOpen(true); setCommandPaletteOpen(false); }}><span><Keyboard size={17} />Keyboard shortcuts</span><kbd>?</kbd></button>
             </div>
           </section>
@@ -233,7 +233,7 @@ export function SonicApp() {
           <section className="tutorial-dialog" role="dialog" aria-modal="true" aria-labelledby="tutorial-heading">
             <header><span className="tutorial-signal" aria-hidden="true">{TUTORIAL_STEPS.map((_, index) => <i key={index} className={index <= tutorialStep ? "is-live" : ""} />)}</span><button type="button" onClick={closeTutorial}>Skip</button></header>
             <div className="tutorial-copy"><span className="eyebrow">{TUTORIAL_STEPS[tutorialStep].eyebrow}</span><h2 id="tutorial-heading">{TUTORIAL_STEPS[tutorialStep].title}</h2><p>{TUTORIAL_STEPS[tutorialStep].copy}</p></div>
-            <footer><button type="button" disabled={tutorialStep === 0} onClick={() => setTutorialStep((step) => Math.max(0, step - 1))}>Back</button>{tutorialStep === TUTORIAL_STEPS.length - 1 ? <button className="primary-action" type="button" onClick={closeTutorial}>Start using Sonic</button> : <button className="primary-action" type="button" onClick={() => setTutorialStep((step) => step + 1)}>Next</button>}</footer>
+            <footer><button type="button" disabled={tutorialStep === 0} onClick={() => setTutorialStep((step) => Math.max(0, step - 1))}>Back</button>{tutorialStep === TUTORIAL_STEPS.length - 1 ? <button className="primary-action" type="button" onClick={closeTutorial}>Done</button> : <button className="primary-action" type="button" onClick={() => setTutorialStep((step) => step + 1)}>Next</button>}</footer>
           </section>
         </div>
       ) : null}
@@ -241,7 +241,7 @@ export function SonicApp() {
       {state.shortcutsOpen ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShortcutsOpen(false); }}>
           <section ref={shortcutDialogRef} className="shortcut-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcut-heading">
-            <header><span><Keyboard size={21} aria-hidden="true" /></span><div><h2 id="shortcut-heading">Keyboard shortcuts</h2><p>Common actions, without reaching for the mouse.</p></div><button autoFocus type="button" onClick={() => setShortcutsOpen(false)} aria-label="Close shortcuts"><X size={17} aria-hidden="true" /></button></header>
+            <header><span><Keyboard size={21} aria-hidden="true" /></span><div><h2 id="shortcut-heading">Keyboard shortcuts</h2><p>Available anywhere in Sonic.</p></div><button autoFocus type="button" onClick={() => setShortcutsOpen(false)} aria-label="Close shortcuts"><X size={17} aria-hidden="true" /></button></header>
             <dl>{SHORTCUTS.map(([keys, action]) => <div key={keys}><dt>{keys.split(" + ").map((key) => <kbd key={key}>{key}</kbd>)}</dt><dd>{action}</dd></div>)}</dl>
           </section>
         </div>

@@ -622,7 +622,7 @@ export class BrowserPreviewBridge implements SonicBridge {
       outputDirectory: this.store.settings.defaultOutputDirectory,
       outputWritable: true,
       availableDiskBytes: 128_400_000_000,
-      updateStatus: "Browser preview — native checks are not running",
+      updateStatus: "Browser preview. Native checks are off.",
       logDirectory: "Local diagnostics are available in the installed app",
     };
   }
@@ -682,7 +682,7 @@ export class BrowserPreviewBridge implements SonicBridge {
   }
 
   async getStemEngineStatus() {
-    return { installed: true, model: "Demucs v4 htdemucs_ft", description: "Browser preview stem engine" };
+    return { installed: true, model: "Demucs v4 htdemucs_ft", description: "Ready to split tracks in browser preview." };
   }
 
   async prepareStemEngine() {

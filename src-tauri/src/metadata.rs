@@ -84,17 +84,16 @@ pub fn parse_music_metadata(title: &str, description: &str) -> MusicMetadata {
         if !selected.alternates.is_empty() {
             result
                 .warnings
-                .push("Multiple or half-time tempo values were declared".to_string());
+                .push("Found more than one possible BPM, including half-time values".to_string());
         }
         if tempos
             .iter()
             .skip(1)
             .any(|candidate| !tempo_equivalent(candidate.candidate.value, selected.candidate.value))
         {
-            result.warnings.push(
-                "Conflicting BPM values were found; the strongest labelled match is shown"
-                    .to_string(),
-            );
+            result
+                .warnings
+                .push("Found conflicting BPM values; showing the clearest match".to_string());
         }
     }
 
@@ -108,10 +107,9 @@ pub fn parse_music_metadata(title: &str, description: &str) -> MusicMetadata {
             .skip(1)
             .any(|candidate| candidate.value.display != selected.value.display)
         {
-            result.warnings.push(
-                "Conflicting key values were found; the strongest labelled match is shown"
-                    .to_string(),
-            );
+            result
+                .warnings
+                .push("Found conflicting keys; showing the clearest match".to_string());
         }
     }
 
@@ -135,7 +133,7 @@ pub fn parse_music_metadata(title: &str, description: &str) -> MusicMetadata {
             if (hz_to_cents(tuning.value) - selected.value).abs() > 5.0 {
                 result
                     .warnings
-                    .push("The declared tuning frequency and cents value do not agree".to_string());
+                    .push("Tuning frequency and detune do not match".to_string());
             }
         }
     }
@@ -687,7 +685,7 @@ mod tests {
         assert!(parsed
             .warnings
             .iter()
-            .any(|warning| warning.contains("tempo")));
+            .any(|warning| warning.contains("possible BPM")));
     }
 
     #[test]
@@ -732,11 +730,11 @@ mod tests {
         assert!(parsed
             .warnings
             .iter()
-            .any(|warning| warning.contains("Conflicting BPM")));
+            .any(|warning| warning.contains("conflicting BPM")));
         assert!(parsed
             .warnings
             .iter()
-            .any(|warning| warning.contains("Conflicting key")));
+            .any(|warning| warning.contains("conflicting keys")));
     }
 
     #[test]
@@ -752,7 +750,7 @@ mod tests {
         assert!(parsed
             .warnings
             .iter()
-            .any(|warning| warning.contains("do not agree")));
+            .any(|warning| warning.contains("do not match")));
     }
 
     #[test]

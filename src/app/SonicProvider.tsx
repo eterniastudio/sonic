@@ -147,7 +147,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
 
   const prepareStemEngine = useCallback(async () => {
     try {
-      dispatch({ type: "announce", message: "Setting up the optional four-stem engine…" });
+      dispatch({ type: "announce", message: "Installing the stem splitter…" });
       await bridge.prepareStemEngine();
       setStemEngine(await bridge.getStemEngineStatus());
       dispatch({ type: "announce", message: "Four-stem engine is ready." });
@@ -177,7 +177,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
         const diagnostics = await bridge.refreshDependencies();
         dispatch({ type: "setDiagnostics", diagnostics });
         if (!diagnostics.engine.ready) {
-          throw new Error("Media tools setup finished, but one or more tools could not be verified.");
+          throw new Error("Media tools were installed, but verification failed. Run setup again.");
         }
         dispatch({ type: "announce", message: "Media tools are ready." });
       })().finally(() => {
@@ -294,11 +294,11 @@ export function SonicProvider({ children }: { children: ReactNode }) {
       }
     });
     if (!entries.length) {
-      setError("Paste at least one YouTube or SoundCloud link.");
+      setError("Paste a YouTube or SoundCloud link.");
       return;
     }
     if (invalid) {
-      setError(`“${invalid}” is not a valid HTTPS media link.`);
+      setError(`“${invalid}” isn’t a valid YouTube or SoundCloud link.`);
       return;
     }
     dispatch({ type: "setError", error: null });
@@ -531,7 +531,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (item.inspection.isLive) {
-      setError("Wait until this stream ends before exporting it.");
+      setError("Live streams can’t be exported until they end.");
       return;
     }
     try {
@@ -549,7 +549,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
         filenameTemplate: template,
       }]);
       jobs.forEach((job) => dispatch({ type: "upsertItem", item: { ...job, id: item.id } }));
-      dispatch({ type: "announce", message: `${item.inspection.title} was added to the export queue.` });
+      dispatch({ type: "announce", message: `Added ${item.inspection.title} to the export queue.` });
     } catch (error) {
       setError(error);
     }
@@ -648,11 +648,11 @@ export function SonicProvider({ children }: { children: ReactNode }) {
       }
     }
     if (failures.length) {
-      setError(`Some finished items could not be cleared. ${failures[0]}`);
+      setError(`Couldn’t clear some finished items: ${failures[0]}`);
       return;
     }
     const retainedMessage = retained
-      ? ` ${retained} finished ${retained === 1 ? "track is" : "tracks are"} still linked to the Library.`
+      ? ` ${retained} finished ${retained === 1 ? "track stays" : "tracks stay"} in Library.`
       : "";
     dispatch({
       type: "announce",
@@ -818,7 +818,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
   const scanSidecarFolder = useCallback(async (folderPath: string, recursive: boolean) => {
     try {
       const report = await bridge.scanSidecarFolder(folderPath, recursive);
-      dispatch({ type: "announce", message: `Imported ${report.importedCount} of ${report.scannedCount} sidecars.` });
+      dispatch({ type: "announce", message: `Imported ${report.importedCount} of ${report.scannedCount} metadata files.` });
     } catch (error) { setError(error); }
   }, [bridge, setError]);
 
@@ -888,7 +888,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     try {
       const asset = await bridge.preparePreview(item);
       if (asset) dispatch({ type: "playerReady", targetId: item.id, asset });
-      else dispatch({ type: "playerUnavailable", targetId: item.id, error: "Export this track before previewing it." });
+      else dispatch({ type: "playerUnavailable", targetId: item.id, error: "Export this track before playing a preview." });
     } catch (error) {
       dispatch({ type: "playerUnavailable", targetId: item.id, error: errorMessage(error) });
     }

@@ -58,7 +58,7 @@ export function SourceComposer() {
       <div className="composer-heading">
         <div>
           <span className="eyebrow">Add audio</span>
-          <h1 id="source-composer-title">Start with a link or file</h1>
+          <h1 id="source-composer-title">Add a link or file</h1>
         </div>
         {bridgeMode === "preview" ? <span className="preview-mode">Browser preview</span> : null}
       </div>
@@ -74,7 +74,7 @@ export function SourceComposer() {
           onKeyDown={(event) => {
             if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) void submit();
           }}
-          placeholder="Paste YouTube or SoundCloud links — one per line"
+          placeholder="Paste YouTube or SoundCloud links, one per line"
         />
         <button className="icon-button" type="button" onClick={() => void paste()} aria-label="Paste links from clipboard" title="Paste links">
           <ClipboardText size={19} aria-hidden="true" />
@@ -89,7 +89,7 @@ export function SourceComposer() {
           <FileAudio size={18} aria-hidden="true" />
           Choose audio files
         </button>
-        <span>or drop WAV, MP3, M4A, FLAC, Opus, OGG, or WebM here</span>
+        <span>Drop audio here: WAV, MP3, M4A, FLAC, Opus, OGG, or WebM</span>
         <kbd>Ctrl</kbd><kbd>Enter</kbd><span className="shortcut-copy">to add links</span>
       </div>
     </section>

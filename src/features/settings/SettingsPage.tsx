@@ -66,7 +66,7 @@ export function SettingsPage() {
   return (
     <main className="settings-page" aria-labelledby="settings-heading">
       <header className="page-heading settings-heading">
-        <div><span className="eyebrow">Preferences</span><h1 id="settings-heading">Settings</h1><p>Choose where files go and how Sonic exports them.</p></div>
+        <div><span className="eyebrow">Settings</span><h1 id="settings-heading">Files and exports</h1><p>Choose where files go and how they’re saved.</p></div>
         <button className="primary-action save-settings" type="button" disabled={saving} onClick={() => void save()}><Check size={18} weight="bold" aria-hidden="true" />{saving ? "Saving…" : "Save changes"}</button>
       </header>
 
@@ -80,12 +80,12 @@ export function SettingsPage() {
             </button>
             <div className="settings-field-grid">
               <label className="field"><span>Default export preset</span><select value={draft.defaultPresetId} onChange={(event) => update("defaultPresetId", event.target.value as SonicSettings["defaultPresetId"])}>{state.presets.map((preset) => <option value={preset.id} key={preset.id}>{preset.name}</option>)}</select></label>
-              <label className="field"><span>Exports at once</span><select value={draft.maxConcurrentJobs} onChange={(event) => update("maxConcurrentJobs", Number(event.target.value))}><option value={1}>1 · uses fewer resources</option><option value={2}>2 at a time</option><option value={3}>3 at a time</option></select></label>
+              <label className="field"><span>Simultaneous exports</span><select value={draft.maxConcurrentJobs} onChange={(event) => update("maxConcurrentJobs", Number(event.target.value))}><option value={1}>1 (lightest)</option><option value={2}>2</option><option value={3}>3</option></select></label>
             </div>
             <div className="settings-switches">
               <label className="switch-field"><input type="checkbox" checked={draft.historyEnabled} onChange={(event) => update("historyEnabled", event.target.checked)} /><span><b>Save exports to Library</b><small>Keep a searchable record of finished tracks</small></span></label>
               <label className="switch-field"><input type="checkbox" checked={draft.writeEmbeddedTags} onChange={(event) => update("writeEmbeddedTags", event.target.checked)} /><span><b>Embed metadata</b><small>Save title, artist, BPM, and key in supported files</small></span></label>
-              <label className="switch-field"><input type="checkbox" checked={draft.includeSourcePathInSidecar} onChange={(event) => update("includeSourcePathInSidecar", event.target.checked)} /><span><b>Save original path in sidecar</b><small>Off by default</small></span></label>
+              <label className="switch-field"><input type="checkbox" checked={draft.includeSourcePathInSidecar} onChange={(event) => update("includeSourcePathInSidecar", event.target.checked)} /><span><b>Save the original file path</b><small>May reveal folder names in metadata</small></span></label>
             </div>
           </section>
 
@@ -104,7 +104,7 @@ export function SettingsPage() {
               <label className="field"><span>Maximum duration</span><span className="input-with-unit"><input type="number" min="1" max="360" value={draft.maxDurationMinutes} onChange={(event) => update("maxDurationMinutes", Number(event.target.value))} /><b>minutes</b></span></label>
               <label className="field"><span>Maximum input size</span><span className="input-with-unit"><input type="number" min="1" max="20" step="0.5" value={Math.round(draft.maxInputBytes / 107_374_182.4) / 10} onChange={(event) => update("maxInputBytes", Math.round(Number(event.target.value) * 1024 ** 3))} /><b>GB</b></span></label>
             </div>
-            <p className="settings-note">Sonic skips any source over these limits. The current file-size limit is {formatBytes(draft.maxInputBytes)}.</p>
+            <p className="settings-note">Tracks over these limits are skipped. Current size limit: {formatBytes(draft.maxInputBytes)}.</p>
           </section>
         </div>
 
@@ -117,18 +117,18 @@ export function SettingsPage() {
             <div className="update-copy">
               <p>
                 {updater.phase === "available" || (updater.phase === "error" && updater.availableVersion)
-                  ? `${updater.availableVersion} is ready to install. Sonic has verified its signature.`
+                  ? `${updater.availableVersion} is ready. Its signature is valid.`
                   : updater.phase === "downloading"
                     ? `Downloaded ${formatBytes(updater.downloadedBytes)}${updater.totalBytes ? ` of ${formatBytes(updater.totalBytes)}` : ""}.`
                     : updater.phase === "installing"
-                      ? "Sonic will restart when the update is installed."
+                      ? "Sonic restarts after the update."
                       : updater.phase === "upToDate"
                         ? `You’re using the latest version: ${state.diagnostics.appVersion}.`
                         : updater.phase === "unavailable"
                           ? "Update checks are only available in the installed app."
                           : updater.phase === "checking"
                             ? "Checking GitHub for a signed update…"
-                            : "Sonic checks for updates after it starts. You choose when to install them."}
+                            : "Sonic checks after startup. You decide when to install."}
               </p>
               {updater.releaseNotes && updater.availableVersion ? <details><summary>What’s new in {updater.availableVersion}</summary><p>{updater.releaseNotes}</p></details> : null}
               {updater.phase === "downloading" || updater.phase === "installing" ? (
@@ -162,15 +162,15 @@ export function SettingsPage() {
           </section>
 
           <section className="settings-section engine-section" aria-labelledby="stem-engine-settings">
-            <header><div><span className="eyebrow">Optional ML engine</span><h2 id="stem-engine-settings">{stemEngine?.installed ? "Four stems ready" : "Stem setup"}</h2></div><Waveform size={22} aria-hidden="true" /></header>
-            <p className="settings-note">{stemEngine?.description ?? "Split a finished track locally into vocals, drums, bass, and other with Demucs v4 htdemucs_ft."}</p>
+            <header><div><span className="eyebrow">Stem splitter</span><h2 id="stem-engine-settings">{stemEngine?.installed ? "Ready" : "Setup needed"}</h2></div><Waveform size={22} aria-hidden="true" /></header>
+            <p className="settings-note">{stemEngine?.description ?? "Split tracks into vocals, drums, bass, and other on this device."}</p>
             <div className="dependency-list"><div><span className={stemEngine?.installed ? "is-ready" : ""} aria-hidden="true" /><strong>{stemEngine?.model ?? "Demucs v4 htdemucs_ft"}</strong><small>{stemEngine?.installed ? "Installed" : "Not installed"}</small></div></div>
-            {!stemEngine?.installed ? <div className="engine-actions"><button className="primary-action" type="button" onClick={() => void prepareStemEngine()}><DownloadSimple size={17} aria-hidden="true" /> Set up 4-stem engine</button></div> : null}
-            <p className="settings-note">Setup uses an isolated Python environment. The ML packages and model are large; the model downloads on first separation.</p>
+            {!stemEngine?.installed ? <div className="engine-actions"><button className="primary-action" type="button" onClick={() => void prepareStemEngine()}><DownloadSimple size={17} aria-hidden="true" /> Install stem splitter</button></div> : null}
+            <p className="settings-note">Setup downloads a large engine. The model downloads the first time you split a track.</p>
           </section>
 
           <section className="settings-section diagnostics-section" aria-labelledby="diagnostics-settings">
-            <header><div><span className="eyebrow">Support</span><h2 id="diagnostics-settings">Diagnostics</h2></div><Bug size={21} aria-hidden="true" /></header>
+            <header><div><span className="eyebrow">Help</span><h2 id="diagnostics-settings">Support</h2></div><Bug size={21} aria-hidden="true" /></header>
             <dl>
               <div><dt>Sonic</dt><dd>{state.diagnostics.appVersion}</dd></div>
               <div><dt>System</dt><dd>{state.diagnostics.operatingSystem}{state.diagnostics.architecture ? ` · ${state.diagnostics.architecture}` : ""}</dd></div>
@@ -183,7 +183,7 @@ export function SettingsPage() {
             </dl>
             {state.diagnostics.recoveryWarnings?.length ? <div className="inline-alert"><WarningCircle size={17} weight="fill" aria-hidden="true" /><ul>{state.diagnostics.recoveryWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}
             <button type="button" onClick={() => void exportDiagnostics()}><Bug size={17} aria-hidden="true" /> Save support report</button>
-            <button type="button" onClick={() => window.dispatchEvent(new Event("sonic:replay-tutorial"))}><Bug size={17} aria-hidden="true" /> Replay getting-started walkthrough</button>
+            <button type="button" onClick={() => window.dispatchEvent(new Event("sonic:replay-tutorial"))}><Bug size={17} aria-hidden="true" /> Replay tutorial</button>
           </section>
         </aside>
       </div>

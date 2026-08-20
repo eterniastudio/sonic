@@ -123,7 +123,7 @@ export function setQueuePausedTransition(state: SonicState, paused: boolean): So
     ...state,
     queuePaused: paused,
     settings: { ...state.settings, queuePaused: paused },
-    announcement: paused ? "Queue paused. The active export will finish." : "Queue resumed.",
+    announcement: paused ? "Queue paused. Active exports will finish." : "Queue resumed.",
   };
 }
 

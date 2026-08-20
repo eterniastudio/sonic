@@ -12,7 +12,7 @@ pub fn export_presets() -> Vec<ExportPreset> {
         preset(
             ExportPresetId::Original,
             "Original stream",
-            "Preserves the acquired audio stream without claiming a quality increase.",
+            "Keeps the source audio without converting it.",
             None,
             false,
             false,
@@ -20,7 +20,7 @@ pub fn export_presets() -> Vec<ExportPreset> {
         preset(
             ExportPresetId::Mp3V0,
             "MP3 V0",
-            "High-quality variable bitrate MP3.",
+            "High-quality variable-rate MP3.",
             Some("mp3"),
             true,
             true,
@@ -28,7 +28,7 @@ pub fn export_presets() -> Vec<ExportPreset> {
         preset(
             ExportPresetId::Mp3Cbr320,
             "MP3 320 kbps",
-            "Constant 320 kbps MP3 for broad DAW compatibility.",
+            "320 kbps MP3 that works in most audio apps.",
             Some("mp3"),
             true,
             true,
@@ -36,7 +36,7 @@ pub fn export_presets() -> Vec<ExportPreset> {
         preset(
             ExportPresetId::M4aAac256,
             "M4A AAC 256 kbps",
-            "Efficient AAC audio at 256 kbps.",
+            "Compact 256 kbps AAC audio.",
             Some("m4a"),
             true,
             true,
@@ -44,7 +44,7 @@ pub fn export_presets() -> Vec<ExportPreset> {
         preset(
             ExportPresetId::Wav44100S24,
             "WAV 44.1 kHz / 24-bit",
-            "Uncompressed PCM for music sessions.",
+            "Uncompressed 24-bit audio at 44.1 kHz.",
             Some("wav"),
             false,
             true,
@@ -52,7 +52,7 @@ pub fn export_presets() -> Vec<ExportPreset> {
         preset(
             ExportPresetId::Wav48000S24,
             "WAV 48 kHz / 24-bit",
-            "Uncompressed PCM for video and modern sessions.",
+            "Uncompressed 24-bit audio at 48 kHz.",
             Some("wav"),
             false,
             true,
@@ -60,7 +60,7 @@ pub fn export_presets() -> Vec<ExportPreset> {
         preset(
             ExportPresetId::Flac,
             "FLAC",
-            "Lossless compressed audio with rich tags.",
+            "Lossless audio with metadata.",
             Some("flac"),
             false,
             true,
@@ -68,7 +68,7 @@ pub fn export_presets() -> Vec<ExportPreset> {
         preset(
             ExportPresetId::Opus192,
             "Opus 192 kbps",
-            "High-efficiency Opus audio at 192 kbps.",
+            "Compact 192 kbps Opus audio.",
             Some("opus"),
             true,
             true,

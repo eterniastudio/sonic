@@ -29,10 +29,9 @@ pub fn status(app: &AppHandle) -> StemEngineStatus {
         installed,
         model: "Demucs v4 htdemucs_ft".into(),
         description: if installed {
-            "Ready for local vocals, drums, bass, and other separation".into()
+            "Ready to split tracks into vocals, drums, bass, and other.".into()
         } else {
-            "Optional local engine; setup downloads Python ML packages and the model on first use"
-                .into()
+            "Install once to split tracks on this device.".into()
         },
     }
 }

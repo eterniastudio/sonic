@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Sonic - Producer Workstation",
+        "title": "Sonic - Audio Downloader and Stem Splitter",
         "width": 1440,
         "height": 900,
         "minWidth": 960,
@@ -56,8 +56,8 @@
       "binaries/python-runtime/yt-dlp": "yt-dlp",
       "binaries/versions.json": "versions.json"
     },
-    "shortDescription": "A local-first producer intake and export workstation.",
-    "longDescription": "Sonic organizes authorized YouTube and SoundCloud media plus local audio into a producer-ready queue with local BPM/key analysis, export recipes, optional four-stem separation, and a searchable local library.",
+    "shortDescription": "Download, analyze, export, and split audio.",
+    "longDescription": "Download authorized audio from YouTube or SoundCloud, add local files, detect BPM and key, export common audio formats, split four stems, and find finished tracks in your Library.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
