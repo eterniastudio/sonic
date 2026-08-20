@@ -96,8 +96,8 @@ where
         match operation(attempt).await {
             Ok(value) => return Ok(value),
             Err(error) => {
-                let retryable = classify_media_failure(&error.to_string())
-                    == RetryDecision::Retryable;
+                let retryable =
+                    classify_media_failure(&error.to_string()) == RetryDecision::Retryable;
                 if !retryable || attempt == max_attempts {
                     return Err(RetryFailure {
                         attempts: attempt,
