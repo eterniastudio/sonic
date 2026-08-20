@@ -6,6 +6,19 @@ changes that require migration notes.
 
 ## [Unreleased]
 
+### Added
+
+- Added cursor-driven Library paging with an accessible load-more control,
+  accurate total-result counts, and facet-backed format filters.
+
+### Fixed
+
+- Normalized native Library pages into the frontend item contract before they
+  reach the renderer, including paths, artists, timestamps, and missing-file
+  state.
+- Preserved Library result totals, facets, and the next-page cursor in reducer
+  state instead of silently discarding the backend metadata.
+
 ## [0.2.3] - 2026-07-28
 
 ### Fixed

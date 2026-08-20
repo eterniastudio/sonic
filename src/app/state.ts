@@ -5,6 +5,7 @@ import type {
   Collection,
   Diagnostics,
   ExportPreset,
+  FacetCount,
   LibraryFacets,
   LibraryItem,
   LibraryRoot,
@@ -156,6 +157,27 @@ function mergeItem(existing: QueueItem | undefined, incoming: QueueItem): QueueI
   };
 }
 
+function decrementFacetCounts(facets: FacetCount[], value?: string): FacetCount[] {
+  if (!value) return facets;
+  const normalized = value.toLocaleLowerCase();
+  return facets.flatMap((facet) => {
+    if (facet.value.toLocaleLowerCase() !== normalized) return [facet];
+    return facet.count > 1 ? [{ ...facet, count: facet.count - 1 }] : [];
+  });
+}
+
+function removeLibraryItemFromFacets(
+  facets: LibraryFacets | null,
+  item: LibraryItem,
+): LibraryFacets | null {
+  if (!facets) return null;
+  return {
+    formats: decrementFacetCounts(facets.formats, item.format),
+    keys: decrementFacetCounts(facets.keys, item.key),
+    missingCount: Math.max(0, facets.missingCount - (item.exists ? 0 : 1)),
+  };
+}
+
 export type SonicAction =
   | { type: "hydrate"; payload: BootstrapPayload }
   | { type: "setRoute"; route: AppRoute }
@@ -205,6 +227,9 @@ export function sonicReducer(state: SonicState, action: SonicAction): SonicState
         jobOrder: action.payload.jobs.map((item) => item.id),
         selectedJobId: selected,
         library: action.payload.library,
+        libraryTotalCount: action.payload.library.length,
+        libraryFacets: null,
+        libraryNextCursor: null,
         selectedLibraryId: action.payload.library[0]?.id ?? null,
         presets: action.payload.presets,
         settings: { ...action.payload.settings, queuePaused: action.payload.queuePaused },
@@ -300,15 +325,22 @@ export function sonicReducer(state: SonicState, action: SonicAction): SonicState
       return {
         ...state,
         library: action.items,
+        libraryTotalCount: action.totalCount ?? action.items.length,
+        libraryFacets: action.facets ?? null,
+        libraryNextCursor: action.nextCursor ?? null,
         selectedLibraryId: action.items.some((item) => item.id === state.selectedLibraryId)
           ? state.selectedLibraryId
           : action.items[0]?.id ?? null,
       };
     case "removeLibraryItem": {
+      const removed = state.library.find((item) => item.id === action.itemId);
+      if (!removed) return state;
       const items = state.library.filter((item) => item.id !== action.itemId);
       return {
         ...state,
         library: items,
+        libraryTotalCount: Math.max(items.length, state.libraryTotalCount - 1),
+        libraryFacets: removeLibraryItemFromFacets(state.libraryFacets, removed),
         selectedLibraryId: state.selectedLibraryId === action.itemId ? items[0]?.id ?? null : state.selectedLibraryId,
       };
     }

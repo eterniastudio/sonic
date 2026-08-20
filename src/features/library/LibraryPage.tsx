@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowClockwise,
   FileAudio,
@@ -12,6 +12,7 @@ import {
 import { useSonic } from "../../app/SonicProvider";
 import { formatBytes, formatDuration, shortPath } from "../../domain/format";
 import type { LibraryFilters, LibrarySort } from "../../domain/types";
+import { requestNextLibraryPage } from "../../services/library-pagination";
 
 const EMPTY_FILTERS: LibraryFilters = { format: "", key: "", bpmMin: "", bpmMax: "", missingOnly: false };
 
@@ -33,6 +34,7 @@ export function LibraryPage() {
   const [sort, setSort] = useState<LibrarySort>("newest");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [separatingId, setSeparatingId] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const hasFilters = Boolean(query.trim() || filters.format || filters.key || filters.bpmMin || filters.bpmMax || filters.missingOnly);
 
   useEffect(() => {
@@ -40,19 +42,38 @@ export function LibraryPage() {
     return () => window.clearTimeout(timer);
   }, [filters, query, refreshLibrary, sort]);
 
-  const items = useMemo(() => [...state.library].sort((left, right) => {
-    if (sort === "oldest") return left.exportedAt.localeCompare(right.exportedAt);
-    if (sort === "title") return left.title.localeCompare(right.title);
-    if (sort === "bpm") return (left.bpm ?? Number.MAX_SAFE_INTEGER) - (right.bpm ?? Number.MAX_SAFE_INTEGER);
-    return right.exportedAt.localeCompare(left.exportedAt);
-  }), [sort, state.library]);
+  useEffect(() => {
+    setLoadingMore(false);
+  }, [filters, query, sort]);
+
+  const items = state.library;
+  const totalCount = Math.max(state.libraryTotalCount, items.length);
+  const pageCount = items.length < totalCount
+    ? `${items.length} of ${totalCount} tracks`
+    : `${totalCount} ${totalCount === 1 ? "track" : "tracks"}`;
+  const formatFacets = state.libraryFacets?.formats.length
+    ? state.libraryFacets.formats
+    : [...new Set(items.map((item) => item.format))].map((value) => ({
+        value,
+        count: items.filter((item) => item.format === value).length,
+      }));
+
+  const loadMore = async () => {
+    if (!requestNextLibraryPage()) return;
+    setLoadingMore(true);
+    try {
+      await refreshLibrary(query, filters, sort);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   return (
     <main className="library-layout" aria-labelledby="library-heading">
       <section className="library-workspace">
         <header className="page-heading">
           <div><span className="eyebrow">Saved tracks</span><h1 id="library-heading">Library</h1><p>Play, split, or export tracks again.</p></div>
-          <span className="page-count">{items.length} {items.length === 1 ? "track" : "tracks"}</span>
+          <span className="page-count" aria-live="polite">{pageCount}</span>
         </header>
 
         <div className="library-tools">
@@ -71,14 +92,16 @@ export function LibraryPage() {
               <option value="newest">Newest first</option>
               <option value="oldest">Oldest first</option>
               <option value="title">Title A–Z</option>
+              <option value="artist">Artist A–Z</option>
               <option value="bpm">Tempo</option>
+              <option value="format">Format</option>
             </select>
           </label>
         </div>
 
         {filtersOpen ? (
           <div className="filter-strip" aria-label="Library filters">
-            <label><span>Format</span><select value={filters.format} onChange={(event) => setFilters((current) => ({ ...current, format: event.target.value }))}><option value="">All</option>{[...new Set(state.library.map((item) => item.format))].map((format) => <option key={format} value={format}>{format.toUpperCase()}</option>)}</select></label>
+            <label><span>Format</span><select value={filters.format} onChange={(event) => setFilters((current) => ({ ...current, format: event.target.value }))}><option value="">All</option>{formatFacets.map((facet) => <option key={facet.value} value={facet.value}>{facet.value.toUpperCase()} ({facet.count})</option>)}</select></label>
             <label><span>Key</span><input value={filters.key} onChange={(event) => setFilters((current) => ({ ...current, key: event.target.value }))} placeholder="F# minor" /></label>
             <label><span>Min BPM</span><input type="number" min="20" max="400" value={filters.bpmMin} onChange={(event) => setFilters((current) => ({ ...current, bpmMin: event.target.value }))} /></label>
             <label><span>Max BPM</span><input type="number" min="20" max="400" value={filters.bpmMax} onChange={(event) => setFilters((current) => ({ ...current, bpmMax: event.target.value }))} /></label>
@@ -88,28 +111,37 @@ export function LibraryPage() {
         ) : null}
 
         {items.length ? (
-          <div className="library-table" role="list" aria-label="Library results">
-            <div className="library-table-head" aria-hidden="true"><span>Track</span><span>Details</span><span>Format</span><span>Exported</span></div>
-            {items.map((item) => (
-              <div role="listitem" key={item.id} className="library-row-item">
-                <button
-                  type="button"
-                  className={`library-row${selected?.id === item.id ? " is-selected" : ""}${!item.exists ? " is-missing" : ""}`}
-                  onClick={() => selectLibraryItem(item.id)}
-                  aria-current={selected?.id === item.id ? "true" : undefined}
-                >
-                <span className="library-track">
-                  <span className="library-art" aria-hidden="true">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" /> : <FileAudio size={21} />}</span>
-                  <span><strong>{item.title}</strong><small>{item.creator ?? item.sourceLabel}</small></span>
-                </span>
-                <span className="library-music"><strong>{item.bpm ? `${item.bpm} BPM` : "No BPM"}</strong><small>{item.key ?? "No key"}{item.camelot ? ` · ${item.camelot}` : ""}</small></span>
-                <span className="format-cell"><b>{item.format.toUpperCase()}</b><small>{formatBytes(item.fileSizeBytes)}</small></span>
-                <span className="date-cell"><strong>{new Date(item.exportedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</strong><small>{item.exists ? "Available" : "File missing"}</small></span>
-                {!item.exists ? <WarningCircle className="missing-icon" size={17} weight="fill" aria-label="File missing" /> : null}
+          <>
+            <div className="library-table" role="list" aria-label="Library results">
+              <div className="library-table-head" aria-hidden="true"><span>Track</span><span>Details</span><span>Format</span><span>Exported</span></div>
+              {items.map((item) => (
+                <div role="listitem" key={item.id} className="library-row-item">
+                  <button
+                    type="button"
+                    className={`library-row${selected?.id === item.id ? " is-selected" : ""}${!item.exists ? " is-missing" : ""}`}
+                    onClick={() => selectLibraryItem(item.id)}
+                    aria-current={selected?.id === item.id ? "true" : undefined}
+                  >
+                  <span className="library-track">
+                    <span className="library-art" aria-hidden="true">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" /> : <FileAudio size={21} />}</span>
+                    <span><strong>{item.title}</strong><small>{item.creator ?? item.sourceLabel}</small></span>
+                  </span>
+                  <span className="library-music"><strong>{item.bpm ? `${item.bpm} BPM` : "No BPM"}</strong><small>{item.key ?? "No key"}{item.camelot ? ` · ${item.camelot}` : ""}</small></span>
+                  <span className="format-cell"><b>{item.format.toUpperCase()}</b><small>{formatBytes(item.fileSizeBytes)}</small></span>
+                  <span className="date-cell"><strong>{new Date(item.exportedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</strong><small>{item.exists ? "Available" : "File missing"}</small></span>
+                  {!item.exists ? <WarningCircle className="missing-icon" size={17} weight="fill" aria-label="File missing" /> : null}
+                  </button>
+                </div>
+              ))}
+            </div>
+            {state.libraryNextCursor ? (
+              <div className="source-actions" style={{ marginTop: 12 }}>
+                <button type="button" disabled={loadingMore} onClick={() => void loadMore()}>
+                  {loadingMore ? "Loading more…" : `Load more (${items.length} of ${totalCount})`}
                 </button>
               </div>
-            ))}
-          </div>
+            ) : null}
+          </>
         ) : (
           <div className="library-empty"><MagnifyingGlass size={31} aria-hidden="true" /><h2>{hasFilters ? "No matches" : "No saved tracks"}</h2><p>{hasFilters ? "Try another search or clear the filters." : "Finished exports appear here."}</p></div>
         )}
