@@ -105,6 +105,37 @@ function mergeLibraryItems(current: LibraryItem[], incoming: LibraryItem[]) {
   return merged;
 }
 
+function compareOptionalText(left: string | undefined, right: string | undefined) {
+  if (left && right) return left.localeCompare(right);
+  if (left) return -1;
+  if (right) return 1;
+  return 0;
+}
+
+function sortLibraryItems(items: LibraryItem[], sort: LibrarySort | undefined) {
+  const sorted = [...items];
+  sorted.sort((left, right) => {
+    switch (sort ?? "newest") {
+      case "oldest":
+        return left.exportedAt.localeCompare(right.exportedAt) || left.id.localeCompare(right.id);
+      case "title":
+        return left.title.localeCompare(right.title) || left.id.localeCompare(right.id);
+      case "artist":
+        return compareOptionalText(left.creator, right.creator) || left.id.localeCompare(right.id);
+      case "bpm": {
+        const leftBpm = left.bpm ?? Number.POSITIVE_INFINITY;
+        const rightBpm = right.bpm ?? Number.POSITIVE_INFINITY;
+        return leftBpm - rightBpm || left.id.localeCompare(right.id);
+      }
+      case "format":
+        return left.format.localeCompare(right.format) || left.id.localeCompare(right.id);
+      default:
+        return right.exportedAt.localeCompare(left.exportedAt) || right.id.localeCompare(left.id);
+    }
+  });
+  return sorted;
+}
+
 function nativeLibraryQuery(
   query: string,
   filters: LibraryFilters | undefined,
@@ -179,14 +210,15 @@ class LibraryPaginationController {
     cursor: string | undefined,
   ): Promise<LibraryPage> {
     const fullPage = normalizeLibraryPage(await this.bridge.listLibrary(query, filters, sort));
+    const sortedItems = sortLibraryItems(fullPage.items, sort);
     const parsedOffset = Number.parseInt(cursor ?? "0", 10);
     const offset = Number.isFinite(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0;
-    const end = Math.min(offset + this.pageSize, fullPage.items.length);
+    const end = Math.min(offset + this.pageSize, sortedItems.length);
 
     return {
       ...fullPage,
-      items: fullPage.items.slice(offset, end),
-      nextCursor: end < fullPage.items.length ? String(end) : undefined,
+      items: sortedItems.slice(offset, end),
+      nextCursor: end < sortedItems.length ? String(end) : undefined,
     };
   }
 
