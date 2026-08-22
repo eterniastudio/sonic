@@ -70,7 +70,9 @@ select {
 }
 
 button {
-  border: 0;
+  appearance: none;
+  background-color: var(--surface-2);
+  border: 1px solid transparent;
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 80ms ease;
 }
 

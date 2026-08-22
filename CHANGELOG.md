@@ -4,6 +4,15 @@ All notable Sonic changes are recorded here. Sonic follows semantic versioning
 while it is pre-1.0; minor releases may still introduce database or workflow
 changes that require migration notes.
 
+## [Unreleased]
+
+### Fixed
+
+- Fixed buttons rendering with light-mode system chrome on the dark interface.
+  Sonic now declares a dark color scheme, gives buttons an explicit dark
+  surface default, and keeps intentionally flat controls transparent, so
+  native WebView2 styling no longer leaks white pills into the console UI.
+
 ## [0.3.0] - 2026-08-22
 
 ### Added

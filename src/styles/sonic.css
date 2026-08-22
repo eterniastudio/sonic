@@ -281,6 +281,32 @@ button {
   font-weight: 600;
 }
 
+/* Buttons that read as part of their surface stay transparent. */
+.icon-button,
+.rail-brand,
+.rail-item,
+.rail-help,
+.row-actions button,
+.root-actions button,
+.duplicate-actions button,
+.sidebar-remove,
+.scope-clear,
+.reset-metadata,
+.bulk-clear,
+.danger-text,
+.destructive-text,
+.clear-completed,
+.view-switch button,
+.transport-tools button,
+.transport-controls > button:not(.transport-play),
+.command-list button,
+.tutorial-dialog header > button,
+.shortcut-dialog header > button,
+.global-toast button {
+  background-color: transparent;
+  border-color: transparent;
+}
+
 .primary-action,
 .danger-action,
 .toolbar-primary,
