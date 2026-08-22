@@ -5,12 +5,13 @@ import { gzipSync } from "node:zlib";
 
 const DIST_DIRECTORY = path.resolve(process.cwd(), process.argv[2] ?? "dist");
 
-// These release gates leave limited, intentional headroom above the v0.2.0
-// production baseline documented in README.md and tests/VERIFICATION.md.
+// These release gates leave limited, intentional headroom above the v0.3.0
+// production baseline (redesigned console UI plus Library Intelligence:
+// collections, tags, bulk tools, duplicate finder, sidecar import).
 const BUDGETS = Object.freeze({
-  javascript: Object.freeze({ raw: 440_000, gzip: 125_000 }),
-  css: Object.freeze({ raw: 42_000, gzip: 8_500 }),
-  total: Object.freeze({ raw: 570_000, gzip: 220_000 }),
+  javascript: Object.freeze({ raw: 490_000, gzip: 137_000 }),
+  css: Object.freeze({ raw: 64_000, gzip: 11_000 }),
+  total: Object.freeze({ raw: 660_000, gzip: 242_000 }),
 });
 
 async function collectFiles(directory) {

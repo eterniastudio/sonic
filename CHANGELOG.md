@@ -10,6 +10,25 @@ changes that require migration notes.
 
 - Added cursor-driven Library paging with an accessible load-more control,
   accurate total-result counts, and facet-backed format filters.
+- Added a redesigned studio-console interface: grouped navigation rail with a
+  live engine chip and queue badge, queue vitals strip, and a refreshed
+  Session, Settings, and transport presentation.
+- Added Library Intelligence to the interface: a Library sidebar with quick
+  views, collections, and tag filtering backed by new SQL filters; grid and
+  list result views; multi-select with bulk tagging, bulk collection adds,
+  and bulk record removal; per-track tag assignment in the detail panel; a
+  duplicate finder for identical audio and same-source exports; and a
+  sidecar-folder import dialog with a scan report.
+- Added `list_collection_items` and `get_item_tags` bridge commands plus
+  `collectionId` and `tagIds` Library query filters (AND tag semantics) so
+  collection and tag scopes resolve in SQLite instead of the renderer.
+
+### Changed
+
+- Recalibrated frontend bundle budgets for the v0.3 console baseline. The
+  previous CSS ceiling was already exceeded on the v0.2.4 tree; the new
+  ceilings cover the redesigned interface and Library Intelligence while
+  keeping release headroom.
 
 ### Fixed
 

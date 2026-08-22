@@ -72,6 +72,7 @@ export interface SonicBridge {
   
   // Tags (v0.3)
   listTags(): Promise<Tag[]>;
+  getItemTags(itemId: string): Promise<Tag[]>;
   createTag(name: string, color?: string): Promise<string>;
   updateTag(id: string, patch: { name?: string; color?: string }): Promise<void>;
   deleteTag(id: string): Promise<void>;
@@ -80,6 +81,7 @@ export interface SonicBridge {
   
   // Collections (v0.3)
   listCollections(): Promise<Collection[]>;
+  listCollectionItems(collectionId: string): Promise<string[]>;
   createCollection(name: string, description?: string): Promise<string>;
   updateCollection(id: string, patch: { name?: string; description?: string }): Promise<void>;
   deleteCollection(id: string): Promise<void>;

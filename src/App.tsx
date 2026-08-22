@@ -5,6 +5,8 @@ import { SonicProvider } from "./app/SonicProvider";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/sonic.css";
+import "./styles/session.css";
+import "./styles/library.css";
 
 export default function App() {
   return (

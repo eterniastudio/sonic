@@ -6,6 +6,9 @@ import {
   DownloadSimple,
   FolderOpen,
   HardDrives,
+  LinkBreak,
+  Plus,
+  Trash,
   WarningCircle,
   Waveform,
 } from "@phosphor-icons/react";
@@ -27,9 +30,16 @@ export function SettingsPage() {
     updater,
     checkForUpdates,
     installUpdate,
+    createLibraryRoot,
+    updateLibraryRoot,
+    deleteLibraryRoot,
   } = useSonic();
   const [draft, setDraft] = useState<SonicSettings>(state.settings);
   const [saving, setSaving] = useState(false);
+  const [rootLabel, setRootLabel] = useState("");
+  const [rootPath, setRootPath] = useState("");
+  const [relinkingId, setRelinkingId] = useState<string | null>(null);
+  const [relinkPath, setRelinkPath] = useState("");
 
   useEffect(() => setDraft(state.settings), [state.settings]);
 
@@ -96,6 +106,63 @@ export function SettingsPage() {
               {draft.templates.map((template) => <button type="button" key={template.id} className={draft.filenameTemplate === template.template ? "is-selected" : ""} onClick={() => { update("filenameTemplate", template.template); update("defaultTemplateId", template.id); }}><strong>{template.name}</strong><small>{template.template}</small></button>)}
             </div>
             <p className="settings-note">Available tokens: <code>{"{title}"}</code> <code>{"{producer}"}</code> <code>{"{bpm}"}</code> <code>{"{key}"}</code> <code>{"{camelot}"}</code> <code>{"{detune}"}</code> <code>{"{preset}"}</code> <code>{"{source}"}</code> <code>{"{date}"}</code></p>
+          </section>
+
+          <section className="settings-section" aria-labelledby="library-storage-settings">
+            <header><div><span className="eyebrow">Library</span><h2 id="library-storage-settings">Library locations</h2></div><HardDrives size={21} aria-hidden="true" /></header>
+            {state.libraryRoots.length ? (
+              <ul className="roots-list">
+                {state.libraryRoots.map((root) => (
+                  <li key={root.id}>
+                    <div className="root-row">
+                      <span className="root-label"><strong>{root.label}</strong><small title={root.rootPath}>{shortPath(root.rootPath, 44)}</small></span>
+                      <span className="root-actions">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRelinkingId(relinkingId === root.id ? null : root.id);
+                            setRelinkPath(root.rootPath);
+                          }}
+                          aria-expanded={relinkingId === root.id}
+                        >
+                          <LinkBreak size={14} aria-hidden="true" /> Relink
+                        </button>
+                        <button type="button" onClick={() => {
+                          if (window.confirm(`Forget the “${root.label}” location? Library records are kept.`)) void deleteLibraryRoot(root.id);
+                        }} aria-label={`Remove location ${root.label}`}>
+                          <Trash size={14} aria-hidden="true" />
+                        </button>
+                      </span>
+                    </div>
+                    {relinkingId === root.id ? (
+                      <div className="relink-form">
+                        <label className="field">
+                          <span>Moved to a new drive letter or folder?</span>
+                          <input value={relinkPath} onChange={(event) => setRelinkPath(event.target.value)} aria-label={`New path for ${root.label}`} />
+                        </label>
+                        <button className="primary-action" type="button" disabled={!relinkPath.trim()} onClick={() => {
+                          void updateLibraryRoot(root.id, { rootPath: relinkPath.trim() });
+                          setRelinkingId(null);
+                        }}>Save new location</button>
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="settings-note">Exports live where you save them. Add a library location to keep drives relinkable if letters change.</p>
+            )}
+            <form className="root-create" onSubmit={(event) => {
+              event.preventDefault();
+              if (!rootLabel.trim() || !rootPath.trim()) return;
+              void createLibraryRoot(rootLabel.trim(), rootPath.trim());
+              setRootLabel("");
+              setRootPath("");
+            }}>
+              <label className="field"><span>Name</span><input value={rootLabel} onChange={(event) => setRootLabel(event.target.value)} placeholder="Main beat drive" aria-label="Library location name" /></label>
+              <label className="field"><span>Folder</span><input value={rootPath} onChange={(event) => setRootPath(event.target.value)} placeholder="D:\Beats" aria-label="Library location folder path" /></label>
+              <button type="submit" disabled={!rootLabel.trim() || !rootPath.trim()}><Plus size={15} weight="bold" aria-hidden="true" /> Add location</button>
+            </form>
           </section>
 
           <section className="settings-section" aria-labelledby="safety-settings">

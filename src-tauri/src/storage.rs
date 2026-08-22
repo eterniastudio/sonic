@@ -916,6 +916,23 @@ impl Repository {
             values.push((if missing { 1_i64 } else { 0_i64 }).into());
         }
 
+        if let Some(collection_id) = query.collection_id.as_deref().filter(|c| !c.is_empty()) {
+            where_clauses.push(
+                "id IN (SELECT item_id FROM collection_items WHERE collection_id = ?)".into(),
+            );
+            values.push(collection_id.to_string().into());
+        }
+
+        // AND semantics: an item must carry every selected tag.
+        for tag_id in &query.tag_ids {
+            if tag_id.is_empty() {
+                continue;
+            }
+            where_clauses
+                .push("id IN (SELECT item_id FROM library_item_tags WHERE tag_id = ?)".into());
+            values.push(tag_id.clone().into());
+        }
+
         let filtered_where_sql = where_clause(&where_clauses);
         let count_sql = format!("SELECT COUNT(*) FROM library_items {filtered_where_sql}");
         let total_count = connection
@@ -1428,6 +1445,17 @@ impl Repository {
         }
 
         Ok(total_removed)
+    }
+
+    pub fn list_collection_items(&self, collection_id: &str) -> AppResult<Vec<String>> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(
+            "SELECT item_id FROM collection_items WHERE collection_id=?1 ORDER BY position, created_at_ms",
+        )?;
+        let items = stmt
+            .query_map(params![collection_id], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(items)
     }
 
     // ==================== Bulk Operations ====================

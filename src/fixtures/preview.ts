@@ -507,14 +507,22 @@ export class BrowserPreviewBridge implements SonicBridge {
     const normalized = query.trim().toLocaleLowerCase();
     const minimum = Number(filters?.bpmMin);
     const maximum = Number(filters?.bpmMax);
+    const collectionId = filters?.collectionId || "";
+    const collectionMemberIds = new Set(
+      collectionId ? this.store.collectionItems[collectionId] ?? [] : [],
+    );
+    const requiredTagIds = (filters?.tagIds ?? []).filter(Boolean);
     const result = this.store.library.filter((item) => {
       const searchable = `${item.title} ${item.creator ?? ""} ${item.key ?? ""} ${item.bpm ?? ""} ${item.outputPath}`.toLocaleLowerCase();
+      const assignedTagIds = this.store.tagAssignments[item.id] ?? [];
       return (!normalized || searchable.includes(normalized))
         && (!filters?.format || item.format === filters.format)
         && (!filters?.key || item.key?.toLocaleLowerCase().includes(filters.key.toLocaleLowerCase()))
         && (!filters?.bpmMin || (item.bpm ?? 0) >= minimum)
         && (!filters?.bpmMax || (item.bpm ?? Number.MAX_SAFE_INTEGER) <= maximum)
-        && (!filters?.missingOnly || !item.exists);
+        && (!filters?.missingOnly || !item.exists)
+        && (!collectionId || collectionMemberIds.has(item.id))
+        && requiredTagIds.every((tagId) => assignedTagIds.includes(tagId));
     });
     result.sort((a, b) => {
       if (sort === "oldest") return a.exportedAt.localeCompare(b.exportedAt);
@@ -730,6 +738,11 @@ export class BrowserPreviewBridge implements SonicBridge {
     })));
   }
 
+  async getItemTags(itemId: string) {
+    const ids = this.store.tagAssignments[itemId] ?? [];
+    return structuredClone(this.store.tags.filter((tag) => ids.includes(tag.id)));
+  }
+
   async createTag(name: string, color?: string) {
     const id = makeId("tag");
     this.store.tags.push({ id, name, color, itemCount: 0, createdAtMs: Date.now() });
@@ -768,6 +781,10 @@ export class BrowserPreviewBridge implements SonicBridge {
       ...collection,
       itemCount: this.store.collectionItems[collection.id]?.length ?? 0,
     })));
+  }
+
+  async listCollectionItems(collectionId: string) {
+    return [...(this.store.collectionItems[collectionId] ?? [])];
   }
 
   async createCollection(name: string, description?: string) {

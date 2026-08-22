@@ -88,6 +88,7 @@ pub fn run() {
             commands::delete_collection,
             commands::add_items_to_collection,
             commands::remove_items_from_collection,
+            commands::list_collection_items,
             commands::bulk_tag_items,
             commands::bulk_update_items,
             commands::bulk_delete_items,

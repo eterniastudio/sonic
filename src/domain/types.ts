@@ -335,6 +335,8 @@ export type LibraryFilters = {
   bpmMin: string;
   bpmMax: string;
   missingOnly: boolean;
+  collectionId?: string;
+  tagIds?: string[];
 };
 
 export type LibrarySort = "newest" | "oldest" | "title" | "bpm" | "artist" | "format";

@@ -823,6 +823,14 @@ pub fn remove_items_from_collection(
 }
 
 #[tauri::command]
+pub fn list_collection_items(
+    state: State<'_, AppState>,
+    collection_id: String,
+) -> AppResult<Vec<String>> {
+    state.repository.list_collection_items(&collection_id)
+}
+
+#[tauri::command]
 pub fn bulk_tag_items(state: State<'_, AppState>, request: BulkTagRequest) -> AppResult<usize> {
     let item_ids: Vec<&str> = request.item_ids.iter().map(|s| s.as_str()).collect();
     let tag_ids: Vec<&str> = request.tag_ids.iter().map(|s| s.as_str()).collect();

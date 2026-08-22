@@ -1,35 +1,109 @@
 :root {
-  font-family: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", sans-serif;
-  color: #f3f3f1;
-  background: #0b0b0c;
+  font-family: var(--font-ui);
+  color: var(--text);
+  background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 
-  --bg: #0b0b0c;
-  --rail: #101011;
-  --surface-1: #131315;
-  --surface-2: #19191c;
-  --surface-3: #212125;
-  --surface-hover: #28282d;
-  --field: #101012;
-  --line: rgba(255, 255, 255, 0.075);
-  --line-strong: rgba(255, 255, 255, 0.145);
-  --text: #f3f3f1;
-  --text-2: #b8b8be;
-  --text-3: #85858e;
-  --signal: #ff3b38;
-  --signal-hover: #ff5350;
-  --signal-soft: rgba(255, 59, 56, 0.12);
-  --success: #56cf7e;
-  --success-soft: rgba(86, 207, 126, 0.12);
-  --warning: #efb650;
-  --warning-soft: rgba(239, 182, 80, 0.12);
-  --danger-soft: rgba(255, 75, 72, 0.1);
-  --focus: rgba(255, 255, 255, 0.92);
+  /* Typography */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", monospace;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 19px;
+  --text-2xl: 24px;
+  --text-display: 30px;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 52px;
+  --space-10: 68px;
+
+  /* Radii */
   --radius-xs: 4px;
   --radius-sm: 6px;
-  --radius: 8px;
-  --radius-lg: 12px;
-  --shadow-float: 0 20px 64px rgba(0, 0, 0, 0.5);
+  --radius: 9px;
+  --radius-lg: 13px;
+  --radius-xl: 18px;
+  --radius-full: 999px;
+
+  /* Surfaces — deep studio graphite with a cool cast */
+  --bg: #08090b;
+  --rail: #0d0e12;
+  --surface-0: #0c0d10;
+  --surface-1: #111217;
+  --surface-2: #17181f;
+  --surface-3: #1e2029;
+  --surface-hover: #252734;
+  --surface-active: #2b2d3b;
+  --field: #0a0b0e;
+  --overlay: rgba(5, 6, 8, 0.72);
+
+  /* Hairlines */
+  --line: rgba(148, 163, 205, 0.09);
+  --line-strong: rgba(148, 163, 205, 0.17);
+  --line-accent: rgba(255, 74, 66, 0.32);
+
+  /* Text */
+  --text: #f2f3f7;
+  --text-2: #b6bac9;
+  --text-3: #7f8496;
+  --text-4: #585d6e;
+
+  /* Brand signal */
+  --signal: #ff4a42;
+  --signal-hover: #ff625b;
+  --signal-active: #e63a33;
+  --signal-soft: rgba(255, 74, 66, 0.13);
+  --signal-softer: rgba(255, 74, 66, 0.07);
+
+  /* States */
+  --success: #4fd88b;
+  --success-soft: rgba(79, 216, 139, 0.12);
+  --warning: #f2b84b;
+  --warning-soft: rgba(242, 184, 75, 0.12);
+  --info: #62b6ff;
+  --info-soft: rgba(98, 182, 255, 0.12);
+  --danger: #ff5550;
+  --danger-soft: rgba(255, 85, 80, 0.11);
+
+  /* Interaction */
+  --focus: rgba(242, 243, 247, 0.92);
+  --focus-ring: 0 0 0 2px rgba(8, 9, 11, 0.9), 0 0 0 4px rgba(255, 74, 66, 0.65);
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 6px rgba(0, 0, 0, 0.22);
+  --shadow-2: 0 4px 14px rgba(0, 0, 0, 0.38), 0 2px 5px rgba(0, 0, 0, 0.28);
+  --shadow-3: 0 24px 70px rgba(0, 0, 0, 0.55), 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-signal: 0 6px 20px rgba(255, 74, 66, 0.28);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 110ms;
+  --dur-base: 170ms;
+  --dur-slow: 260ms;
+
+  /* Controls */
+  --control-h: 34px;
+  --control-h-sm: 29px;
+  --control-h-lg: 42px;
+  --sidebar-w: 208px;
+
+  /* Z layers */
+  --z-rail: 60;
+  --z-toolbar: 40;
+  --z-overlay: 80;
+  --z-toast: 100;
 }

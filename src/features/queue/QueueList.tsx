@@ -37,6 +37,8 @@ export function QueueList() {
     cancelItem,
   } = useSonic();
   const readyCount = jobs.filter((item) => item.status === "review").length;
+  const activeCount = jobs.filter((item) => isQueueItemActive(item)).length;
+  const completedCount = jobs.filter((item) => ["completed", "cancelled"].includes(item.status)).length;
   const finished = jobs.filter((item) => ["completed", "cancelled"].includes(item.status));
   const clearableFinishedCount = finished.filter((item) => queueRemovalMode(item, state.library) !== "retain-library").length;
   const retainedCompletedCount = finished.length - clearableFinishedCount;
@@ -60,6 +62,14 @@ export function QueueList() {
           ) : null}
         </div>
       </header>
+
+      {jobs.length ? (
+        <dl className="queue-vitals" aria-label="Queue summary">
+          <div><dt>Ready</dt><dd>{readyCount}</dd></div>
+          <div><dt>Working</dt><dd>{activeCount}</dd></div>
+          <div><dt>Finished</dt><dd>{completedCount}</dd></div>
+        </dl>
+      ) : null}
 
       {state.queuePaused ? (
         <div className="queue-paused" role="status">

@@ -423,6 +423,10 @@ pub struct LibraryQuery {
     pub bpm_max: Option<f64>,
     pub format: Option<String>,
     pub missing: Option<bool>,
+    #[serde(default)]
+    pub collection_id: Option<String>,
+    #[serde(default)]
+    pub tag_ids: Vec<String>,
     pub limit: Option<u32>,
     pub cursor: Option<String>,
     #[serde(default)]

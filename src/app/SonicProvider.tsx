@@ -27,7 +27,10 @@ import {
   selectJobs,
   selectSelectedJob,
   selectSelectedLibraryItem,
+  selectSelectedLibraryItems,
   sonicReducer,
+  type DuplicateScan,
+  type LibraryView,
   type SonicState,
 } from "./state";
 
@@ -53,6 +56,7 @@ export type SonicContextValue = {
   jobs: QueueItem[];
   selectedJob: QueueItem | null;
   selectedLibraryItem: LibraryItem | null;
+  selectedLibraryItems: LibraryItem[];
   bridgeMode: SonicBridge["mode"];
   updater: UpdaterState;
   stemEngine: StemEngineStatus | null;
@@ -102,23 +106,31 @@ export type SonicContextValue = {
   updateLibraryRoot(id: string, patch: { label?: string; rootPath?: string }): Promise<void>;
   deleteLibraryRoot(id: string): Promise<void>;
   listTags(): Promise<void>;
-  createTag(name: string, color?: string): Promise<void>;
+  createTag(name: string, color?: string): Promise<string | null>;
   updateTag(id: string, patch: { name?: string; color?: string }): Promise<void>;
   deleteTag(id: string): Promise<void>;
   assignTagToItem(itemId: string, tagId: string): Promise<void>;
   removeTagFromItem(itemId: string, tagId: string): Promise<void>;
   listCollections(): Promise<void>;
-  createCollection(name: string, description?: string): Promise<void>;
+  listCollectionItems(collectionId: string): Promise<string[]>;
+  createCollection(name: string, description?: string): Promise<string | null>;
   updateCollection(id: string, patch: { name?: string; description?: string }): Promise<void>;
   deleteCollection(id: string): Promise<void>;
   addItemsToCollection(collectionId: string, itemIds: string[]): Promise<void>;
   removeItemsFromCollection(collectionId: string, itemIds: string[]): Promise<void>;
   bulkTagItems(itemIds: string[], tagId: string): Promise<void>;
+  bulkAddSelectionToCollection(collectionId: string): Promise<void>;
   bulkDeleteItems(itemIds: string[], deleteFiles: boolean): Promise<void>;
-  findDuplicatesBySha256(): Promise<void>;
-  scanSidecarFolder(folderPath: string, recursive: boolean): Promise<void>;
+  findDuplicates(kind: DuplicateScan["kind"]): Promise<void>;
+  clearDuplicateScan(): void;
+  scanSidecarFolder(folderPath: string, recursive: boolean): Promise<boolean>;
+  clearSidecarReport(): void;
   toggleTagSelection(tagId: string): void;
   selectCollection(collectionId: string | null): void;
+  toggleLibrarySelection(itemId: string): void;
+  setAllLibrarySelected(selected: boolean): void;
+  clearLibrarySelection(): void;
+  setLibraryView(view: LibraryView): void;
 };
 
 const SonicContext = createContext<SonicContextValue | null>(null);
@@ -755,72 +767,159 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     try { dispatch({ type: "setTags", tags: await bridge.listTags() }); } catch (error) { setError(error); }
   }, [bridge, setError]);
 
+  const loadItemTags = useCallback(async (itemId: string) => {
+    try { dispatch({ type: "setItemTags", itemId, tags: await bridge.getItemTags(itemId) }); } catch { /* Tag display is optional. */ }
+  }, [bridge]);
+
+  useEffect(() => {
+    if (!state.selectedLibraryId) return;
+    void loadItemTags(state.selectedLibraryId);
+  }, [loadItemTags, state.selectedLibraryId]);
+
   const createTag = useCallback(async (name: string, color?: string) => {
-    try { await bridge.createTag(name, color); await listTags(); dispatch({ type: "announce", message: "Tag created." }); } catch (error) { setError(error); }
+    try {
+      const id = await bridge.createTag(name, color);
+      await listTags();
+      dispatch({ type: "announce", message: `Tag “${name}” created.` });
+      return id ?? null;
+    } catch (error) { setError(error); return null; }
   }, [bridge, listTags, setError]);
 
   const updateTag = useCallback(async (id: string, patch: { name?: string; color?: string }) => {
-    try { await bridge.updateTag(id, patch); await listTags(); dispatch({ type: "announce", message: "Tag updated." }); } catch (error) { setError(error); }
+    try { await bridge.updateTag(id, patch); await listTags(); } catch (error) { setError(error); }
   }, [bridge, listTags, setError]);
 
   const deleteTag = useCallback(async (id: string) => {
-    try { await bridge.deleteTag(id); await listTags(); dispatch({ type: "announce", message: "Tag deleted." }); } catch (error) { setError(error); }
+    try {
+      await bridge.deleteTag(id);
+      await listTags();
+      dispatch({ type: "setDuplicateScan", scan: null });
+      if (stateRef.current.selectedTagIds.includes(id)) {
+        dispatch({ type: "toggleTagSelection", tagId: id });
+      }
+    } catch (error) { setError(error); }
   }, [bridge, listTags, setError]);
 
   const assignTagToItem = useCallback(async (itemId: string, tagId: string) => {
-    try { await bridge.assignTagToItem(itemId, tagId); dispatch({ type: "announce", message: "Tag assigned." }); } catch (error) { setError(error); }
-  }, [bridge, setError]);
+    try {
+      await bridge.assignTagToItem(itemId, tagId);
+      await Promise.all([listTags(), loadItemTags(itemId)]);
+    } catch (error) { setError(error); }
+  }, [bridge, listTags, loadItemTags, setError]);
 
   const removeTagFromItem = useCallback(async (itemId: string, tagId: string) => {
-    try { await bridge.removeTagFromItem(itemId, tagId); dispatch({ type: "announce", message: "Tag removed." }); } catch (error) { setError(error); }
-  }, [bridge, setError]);
+    try {
+      await bridge.removeTagFromItem(itemId, tagId);
+      await Promise.all([listTags(), loadItemTags(itemId)]);
+    } catch (error) { setError(error); }
+  }, [bridge, listTags, loadItemTags, setError]);
 
   const listCollections = useCallback(async () => {
     try { dispatch({ type: "setCollections", collections: await bridge.listCollections() }); } catch (error) { setError(error); }
   }, [bridge, setError]);
 
+  const listCollectionItems = useCallback(async (collectionId: string) => {
+    try { return await bridge.listCollectionItems(collectionId); } catch (error) { setError(error); return []; }
+  }, [bridge, setError]);
+
   const createCollection = useCallback(async (name: string, description?: string) => {
-    try { await bridge.createCollection(name, description); await listCollections(); dispatch({ type: "announce", message: "Collection created." }); } catch (error) { setError(error); }
+    try {
+      const id = await bridge.createCollection(name, description);
+      await listCollections();
+      dispatch({ type: "announce", message: `Collection “${name}” created.` });
+      return id ?? null;
+    } catch (error) { setError(error); return null; }
   }, [bridge, listCollections, setError]);
 
   const updateCollection = useCallback(async (id: string, patch: { name?: string; description?: string }) => {
-    try { await bridge.updateCollection(id, patch); await listCollections(); dispatch({ type: "announce", message: "Collection updated." }); } catch (error) { setError(error); }
+    try { await bridge.updateCollection(id, patch); await listCollections(); } catch (error) { setError(error); }
   }, [bridge, listCollections, setError]);
 
   const deleteCollection = useCallback(async (id: string) => {
-    try { await bridge.deleteCollection(id); await listCollections(); dispatch({ type: "announce", message: "Collection deleted." }); } catch (error) { setError(error); }
+    try {
+      await bridge.deleteCollection(id);
+      await listCollections();
+      if (stateRef.current.selectedCollectionId === id) dispatch({ type: "selectCollection", collectionId: null });
+    } catch (error) { setError(error); }
   }, [bridge, listCollections, setError]);
 
   const addItemsToCollection = useCallback(async (collectionId: string, itemIds: string[]) => {
-    try { await bridge.addItemsToCollection(collectionId, itemIds); dispatch({ type: "announce", message: "Items added to collection." }); } catch (error) { setError(error); }
-  }, [bridge, setError]);
+    try {
+      await bridge.addItemsToCollection(collectionId, itemIds);
+      await listCollections();
+      dispatch({ type: "announce", message: `Added ${itemIds.length} ${itemIds.length === 1 ? "track" : "tracks"} to the collection.` });
+    } catch (error) { setError(error); }
+  }, [bridge, listCollections, setError]);
 
   const removeItemsFromCollection = useCallback(async (collectionId: string, itemIds: string[]) => {
-    try { await bridge.removeItemsFromCollection(collectionId, itemIds); dispatch({ type: "announce", message: "Items removed from collection." }); } catch (error) { setError(error); }
-  }, [bridge, setError]);
+    try { await bridge.removeItemsFromCollection(collectionId, itemIds); await listCollections(); } catch (error) { setError(error); }
+  }, [bridge, listCollections, setError]);
 
   const bulkTagItems = useCallback(async (itemIds: string[], tagId: string) => {
-    try { await bridge.bulkTagItems(itemIds, tagId); dispatch({ type: "announce", message: `Tagged ${itemIds.length} items.` }); } catch (error) { setError(error); }
-  }, [bridge, setError]);
+    try {
+      await bridge.bulkTagItems(itemIds, tagId);
+      await listTags();
+      await Promise.all(itemIds.map((itemId) => loadItemTags(itemId)));
+      dispatch({ type: "announce", message: `Tagged ${itemIds.length} ${itemIds.length === 1 ? "track" : "tracks"}.` });
+    } catch (error) { setError(error); }
+  }, [bridge, listTags, loadItemTags, setError]);
+
+  const bulkAddSelectionToCollection = useCallback(async (collectionId: string) => {
+    const items = selectSelectedLibraryItems(stateRef.current);
+    if (!items.length) return;
+    try {
+      await bridge.addItemsToCollection(collectionId, items.map((item) => item.id));
+      await listCollections();
+      dispatch({ type: "announce", message: `Added ${items.length} ${items.length === 1 ? "track" : "tracks"} to the collection.` });
+    } catch (error) { setError(error); }
+  }, [bridge, listCollections, setError]);
 
   const bulkDeleteItems = useCallback(async (itemIds: string[], deleteFiles: boolean) => {
-    try { await bridge.bulkDeleteItems(itemIds, deleteFiles); dispatch({ type: "announce", message: `Deleted ${itemIds.length} items.` }); } catch (error) { setError(error); }
-  }, [bridge, setError]);
-
-  const findDuplicatesBySha256 = useCallback(async () => {
     try {
-      const groups = await bridge.findDuplicatesBySha256();
-      const count = groups.filter((group) => group.count > 1).length;
-      dispatch({ type: "announce", message: count ? `Found ${count} duplicate groups.` : "No duplicates found." });
+      await bridge.bulkDeleteItems(itemIds, deleteFiles);
+      dispatch({ type: "setLibrarySelection", itemIds: [] });
+      dispatch({
+        type: "setLibrary",
+        items: stateRef.current.library.filter((item) => !itemIds.includes(item.id)),
+        totalCount: Math.max(0, stateRef.current.libraryTotalCount - itemIds.length),
+        facets: stateRef.current.libraryFacets ?? undefined,
+      });
+      await refreshLibrary();
+    } catch (error) { setError(error); }
+  }, [bridge, refreshLibrary, setError]);
+
+  const findDuplicates = useCallback(async (kind: DuplicateScan["kind"]) => {
+    try {
+      const groups = (await (kind === "sha256"
+        ? bridge.findDuplicatesBySha256()
+        : bridge.findDuplicatesBySource())).filter((group) => group.count > 1);
+      const scan: DuplicateScan = { kind, groups, checkedAtMs: Date.now() };
+      dispatch({ type: "setDuplicateScan", scan });
+      dispatch({
+        type: "announce",
+        message: groups.length
+          ? `Found ${groups.length} duplicate ${groups.length === 1 ? "group" : "groups"}.`
+          : "No duplicate audio found.",
+      });
     } catch (error) { setError(error); }
   }, [bridge, setError]);
+
+  const clearDuplicateScan = useCallback(() => dispatch({ type: "setDuplicateScan", scan: null }), []);
 
   const scanSidecarFolder = useCallback(async (folderPath: string, recursive: boolean) => {
     try {
       const report = await bridge.scanSidecarFolder(folderPath, recursive);
-      dispatch({ type: "announce", message: `Imported ${report.importedCount} of ${report.scannedCount} metadata files.` });
-    } catch (error) { setError(error); }
-  }, [bridge, setError]);
+      dispatch({ type: "setSidecarReport", report: { ...report, folderPath } });
+      await Promise.all([listTags(), listCollections()]);
+      await refreshLibrary();
+      return true;
+    } catch (error) {
+      setError(error);
+      return false;
+    }
+  }, [bridge, listCollections, listTags, refreshLibrary, setError]);
+
+  const clearSidecarReport = useCallback(() => dispatch({ type: "setSidecarReport", report: null }), []);
 
   const toggleTagSelection = useCallback((tagId: string) => {
     dispatch({ type: "toggleTagSelection", tagId });
@@ -829,6 +928,33 @@ export function SonicProvider({ children }: { children: ReactNode }) {
   const selectCollection = useCallback((collectionId: string | null) => {
     dispatch({ type: "selectCollection", collectionId });
   }, []);
+
+  const toggleLibrarySelection = useCallback((itemId: string) => {
+    dispatch({ type: "toggleLibrarySelection", itemId });
+  }, []);
+
+  const setAllLibrarySelected = useCallback((selected: boolean) => {
+    dispatch({
+      type: "setLibrarySelection",
+      itemIds: selected ? stateRef.current.library.map((item) => item.id) : [],
+    });
+  }, []);
+
+  const clearLibrarySelection = useCallback(() => {
+    dispatch({ type: "setLibrarySelection", itemIds: [] });
+  }, []);
+
+  const setLibraryView = useCallback((view: LibraryView) => {
+    dispatch({ type: "setLibraryView", view });
+  }, []);
+
+  // Hydrate collections, tags, and roots once the session is available.
+  useEffect(() => {
+    if (state.loading) return;
+    void listTags();
+    void listCollections();
+    void listLibraryRoots();
+  }, [listCollections, listLibraryRoots, listTags, state.loading]);
 
   const chooseOutputDirectory = useCallback(async (itemId?: string, baseSettings?: SonicSettings) => {
     const current = itemId ? stateRef.current.jobsById[itemId]?.outputDirectory : stateRef.current.settings.defaultOutputDirectory;
@@ -905,6 +1031,7 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     jobs: selectJobs(state),
     selectedJob: selectSelectedJob(state),
     selectedLibraryItem: selectSelectedLibraryItem(state),
+    selectedLibraryItems: selectSelectedLibraryItems(state),
     bridgeMode: bridge.mode,
     updater,
     stemEngine,
@@ -960,17 +1087,25 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     assignTagToItem,
     removeTagFromItem,
     listCollections,
+    listCollectionItems,
     createCollection,
     updateCollection,
     deleteCollection,
     addItemsToCollection,
     removeItemsFromCollection,
     bulkTagItems,
+    bulkAddSelectionToCollection,
     bulkDeleteItems,
-    findDuplicatesBySha256,
+    findDuplicates,
+    clearDuplicateScan,
     scanSidecarFolder,
+    clearSidecarReport,
     toggleTagSelection,
     selectCollection,
+    toggleLibrarySelection,
+    setAllLibrarySelected,
+    clearLibrarySelection,
+    setLibraryView,
   }), [
     addLocalPaths, addUrls, bridge, cancelItem, checkForUpdates, chooseOutputDirectory, clearCompleted, enqueueAllReady,
     enqueueItem, exportDiagnostics, importFiles, installUpdate, loadPreview, moveItem, openSource, prepareEngine,
@@ -982,9 +1117,11 @@ export function SonicProvider({ children }: { children: ReactNode }) {
     listLibraryRoots, createLibraryRoot, updateLibraryRoot, deleteLibraryRoot,
     listTags, createTag, updateTag, deleteTag, assignTagToItem, removeTagFromItem,
     listCollections, createCollection, updateCollection, deleteCollection,
-    addItemsToCollection, removeItemsFromCollection,
-    bulkTagItems, bulkDeleteItems, findDuplicatesBySha256, scanSidecarFolder,
+    listCollectionItems, addItemsToCollection, removeItemsFromCollection,
+    bulkTagItems, bulkAddSelectionToCollection, bulkDeleteItems,
+    findDuplicates, clearDuplicateScan, scanSidecarFolder, clearSidecarReport,
     toggleTagSelection, selectCollection,
+    toggleLibrarySelection, setAllLibrarySelected, clearLibrarySelection, setLibraryView,
   ]);
 
   return <SonicContext.Provider value={value}>{children}</SonicContext.Provider>;

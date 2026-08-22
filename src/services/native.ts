@@ -444,6 +444,8 @@ export class NativeBridge implements SonicBridge {
         bpmMax: optionalNumber(filters?.bpmMax ?? "") ?? null,
         format: filters?.format || null,
         missing: filters?.missingOnly ? true : null,
+        collectionId: filters?.collectionId || null,
+        tagIds: filters?.tagIds ?? [],
         limit: 100,
         cursor: null,
         sort: sort ?? "newest",
@@ -716,6 +718,28 @@ export class NativeBridge implements SonicBridge {
     });
   }
 
+  async getItemTags(itemId: string): Promise<Tag[]> {
+    try {
+      const value = await invoke<unknown>("get_item_tags", { itemId });
+      return asArray(value).flatMap((entry) => {
+        const tag = asRecord(entry);
+        const id = asString(tag.id);
+        const name = asString(tag.name);
+        if (!id || !name) return [];
+        return [{
+          id,
+          name,
+          color: asString(tag.color) || undefined,
+          createdAtMs: asNumber(tag.createdAtMs) ?? 0,
+          itemCount: 0,
+        } satisfies Tag];
+      });
+    } catch (error) {
+      if (!commandUnavailable(error)) throw error;
+      return [];
+    }
+  }
+
   async createTag(name: string, color?: string) {
     return invoke<string>("create_tag", { request: { name, color } });
   }
@@ -756,6 +780,16 @@ export class NativeBridge implements SonicBridge {
         itemCount: asNumber(tuple[1]) ?? 0,
       } satisfies Collection];
     });
+  }
+
+  async listCollectionItems(collectionId: string): Promise<string[]> {
+    try {
+      const value = await invoke<unknown>("list_collection_items", { collectionId });
+      return asArray(value).map((item) => asString(item)).filter(Boolean);
+    } catch (error) {
+      if (!commandUnavailable(error)) throw error;
+      return [];
+    }
   }
 
   async createCollection(name: string, description?: string) {

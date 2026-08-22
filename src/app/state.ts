@@ -4,6 +4,7 @@ import type {
   BootstrapPayload,
   Collection,
   Diagnostics,
+  DuplicateGroup,
   ExportPreset,
   FacetCount,
   LibraryFacets,
@@ -12,6 +13,7 @@ import type {
   PreviewAsset,
   QueueItem,
   QueueSnapshot,
+  SidecarImportReport,
   SonicSettings,
   Tag,
 } from "../domain/types";
@@ -24,6 +26,14 @@ export type PlayerState = {
   currentTime: number;
   loop: boolean;
   error?: string;
+};
+
+export type LibraryView = "list" | "grid";
+
+export type DuplicateScan = {
+  kind: "sha256" | "source";
+  groups: DuplicateGroup[];
+  checkedAtMs: number;
 };
 
 export type SonicState = {
@@ -54,6 +64,11 @@ export type SonicState = {
   collections: Collection[];
   selectedTagIds: string[];
   selectedCollectionId: string | null;
+  selectedLibraryIds: string[];
+  libraryView: LibraryView;
+  itemTagsById: Record<string, Tag[]>;
+  duplicateScan: DuplicateScan | null;
+  sidecarReport: (SidecarImportReport & { folderPath: string }) | null;
 };
 
 const EMPTY_DIAGNOSTICS: Diagnostics = {
@@ -97,6 +112,11 @@ export const initialState: SonicState = {
   collections: [],
   selectedTagIds: [],
   selectedCollectionId: null,
+  selectedLibraryIds: [],
+  libraryView: "list",
+  itemTagsById: {},
+  duplicateScan: null,
+  sidecarReport: null,
 };
 
 export function moveQueueItem(order: string[], itemId: string, direction: -1 | 1) {
@@ -211,7 +231,13 @@ export type SonicAction =
   | { type: "setTags"; tags: Tag[] }
   | { type: "setCollections"; collections: Collection[] }
   | { type: "toggleTagSelection"; tagId: string }
-  | { type: "selectCollection"; collectionId: string | null };
+  | { type: "selectCollection"; collectionId: string | null }
+  | { type: "toggleLibrarySelection"; itemId: string }
+  | { type: "setLibrarySelection"; itemIds: string[] }
+  | { type: "setLibraryView"; view: LibraryView }
+  | { type: "setItemTags"; itemId: string; tags: Tag[] }
+  | { type: "setDuplicateScan"; scan: DuplicateScan | null }
+  | { type: "setSidecarReport"; report: (SidecarImportReport & { folderPath: string }) | null };
 
 export function sonicReducer(state: SonicState, action: SonicAction): SonicState {
   switch (action.type) {
@@ -331,17 +357,21 @@ export function sonicReducer(state: SonicState, action: SonicAction): SonicState
         selectedLibraryId: action.items.some((item) => item.id === state.selectedLibraryId)
           ? state.selectedLibraryId
           : action.items[0]?.id ?? null,
+        selectedLibraryIds: state.selectedLibraryIds.filter((id) => action.items.some((item) => item.id === id)),
       };
     case "removeLibraryItem": {
       const removed = state.library.find((item) => item.id === action.itemId);
       if (!removed) return state;
       const items = state.library.filter((item) => item.id !== action.itemId);
+      const { [action.itemId]: _removedTags, ...itemTagsById } = state.itemTagsById;
       return {
         ...state,
         library: items,
         libraryTotalCount: Math.max(items.length, state.libraryTotalCount - 1),
         libraryFacets: removeLibraryItemFromFacets(state.libraryFacets, removed),
         selectedLibraryId: state.selectedLibraryId === action.itemId ? items[0]?.id ?? null : state.selectedLibraryId,
+        selectedLibraryIds: state.selectedLibraryIds.filter((id) => id !== action.itemId),
+        itemTagsById,
       };
     }
     case "selectLibraryItem":
@@ -408,6 +438,23 @@ export function sonicReducer(state: SonicState, action: SonicAction): SonicState
     }
     case "selectCollection":
       return { ...state, selectedCollectionId: action.collectionId };
+    case "toggleLibrarySelection":
+      return {
+        ...state,
+        selectedLibraryIds: state.selectedLibraryIds.includes(action.itemId)
+          ? state.selectedLibraryIds.filter((id) => id !== action.itemId)
+          : [...state.selectedLibraryIds, action.itemId],
+      };
+    case "setLibrarySelection":
+      return { ...state, selectedLibraryIds: action.itemIds };
+    case "setLibraryView":
+      return { ...state, libraryView: action.view };
+    case "setItemTags":
+      return { ...state, itemTagsById: { ...state.itemTagsById, [action.itemId]: action.tags } };
+    case "setDuplicateScan":
+      return { ...state, duplicateScan: action.scan };
+    case "setSidecarReport":
+      return { ...state, sidecarReport: action.report };
     default:
       return state;
   }
@@ -432,4 +479,9 @@ export function selectSelectedTags(state: SonicState) {
 
 export function selectSelectedCollection(state: SonicState) {
   return state.collections.find((c) => c.id === state.selectedCollectionId) ?? null;
+}
+
+export function selectSelectedLibraryItems(state: SonicState) {
+  const selected = new Set(state.selectedLibraryIds);
+  return state.library.filter((item) => selected.has(item.id));
 }
