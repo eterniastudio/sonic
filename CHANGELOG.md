@@ -4,7 +4,7 @@ All notable Sonic changes are recorded here. Sonic follows semantic versioning
 while it is pre-1.0; minor releases may still introduce database or workflow
 changes that require migration notes.
 
-## [Unreleased]
+## [0.3.0] - 2026-08-22
 
 ### Added
 
@@ -129,7 +129,8 @@ changes that require migration notes.
   process, startup entry, shortcut, application data, or stale smoke root is
   already present, then verifies owned-resource cleanup after the run.
 
-[Unreleased]: https://github.com/eterniastudio/sonic/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/eterniastudio/sonic/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/eterniastudio/sonic/compare/v0.2.4...v0.3.0
 [0.2.3]: https://github.com/eterniastudio/sonic/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/eterniastudio/sonic/compare/v0.2.0...v0.2.2
 [0.2.0]: https://github.com/eterniastudio/sonic/compare/v0.1.3...v0.2.0
