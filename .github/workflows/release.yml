@@ -44,7 +44,7 @@ jobs:
           rustc --version --verbose
 
       - name: Install Rust release-quality tools
-        uses: taiki-e/install-action@82cd3e7658a6f96c86c0234aeeda1748937cb0a1 # v2.85.13
+        uses: taiki-e/install-action@5bf6ce016fd2e72eefc647cbca1e4213f65955b8 # v2.87.5
         with:
           tool: |
             cargo-audit@0.22.2
