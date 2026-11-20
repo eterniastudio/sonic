@@ -1,0 +1,530 @@
+@import 'tailwindcss';
+@import './transitions.css';
+@import '@fontsource-variable/archivo/wdth.css';
+@import '@fontsource-variable/shantell-sans/infm.css';
+
+/* data-theme drives both the palette and Tailwind's dark variant. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* ============================================================================
+   White Label palette
+   Dark is black vinyl under label-white type; light is the label stock itself.
+   Colour is spent on meaning: stamp ink marks selection, the primary action
+   and focus; promo red marks loss. Everything else is ink on stock.
+   ========================================================================= */
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  --sonic-bg: #f4f4f1;
+  --sonic-bg-deep: #e9e9e4;
+  --sonic-surface: #fbfbf9;
+  --sonic-surface-2: #e8e8e3;
+  --sonic-surface-3: #dcdcd5;
+  --sonic-border: #d6d6cf;
+  --sonic-border-strong: #a9a9a0;
+  --sonic-fg: #151515;
+  --sonic-fg-muted: #45453f;
+  --sonic-fg-subtle: #64645d;
+  --sonic-transport: #ebebe6;
+  --sonic-artwork-bg: #e2e2dc;
+  --sonic-overlay: rgba(21, 21, 21, 0.42);
+  --sonic-fg-on-accent: #ffffff;
+  --sonic-vinyl: #151515;
+  --sonic-label: #fbfbf9;
+
+  --sonic-cyan: #1f5fae;
+  --sonic-success: #1b6e44;
+  --sonic-warning: #9a5a00;
+  --sonic-danger: #c4232f;
+
+
+  --sonic-shadow-panel: none;
+  --sonic-shadow-pop: 0 10px 28px -10px rgba(21, 21, 21, 0.32);
+  --sonic-grid: rgba(21, 21, 21, 0.05);
+  --sonic-sheen: transparent;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --sonic-bg: #131313;
+  --sonic-bg-deep: #0c0c0c;
+  --sonic-surface: #1a1a19;
+  --sonic-surface-2: #232322;
+  --sonic-surface-3: #2e2e2c;
+  --sonic-border: #2b2b29;
+  --sonic-border-strong: #4a4a45;
+  --sonic-fg: #efefe9;
+  --sonic-fg-muted: #b9b9b1;
+  --sonic-fg-subtle: #918f88;
+  --sonic-transport: #171717;
+  --sonic-artwork-bg: #262624;
+  --sonic-overlay: rgba(0, 0, 0, 0.66);
+  --sonic-fg-on-accent: #0b0d33;
+  --sonic-vinyl: #0a0a0a;
+  --sonic-label: #efefe9;
+
+  --sonic-cyan: #7fb4ff;
+  --sonic-success: #6fd39f;
+  --sonic-warning: #f0b45a;
+  --sonic-danger: #ff7b80;
+
+
+  --sonic-shadow-panel: none;
+  --sonic-shadow-pop: 0 14px 36px -12px rgba(0, 0, 0, 0.7);
+  --sonic-grid: rgba(255, 255, 255, 0.03);
+  --sonic-sheen: transparent;
+}
+
+/* One ink. The stored accent setting predates White Label; every value now
+   resolves to stamp blue so success, warning and loss keep their own colours. */
+:root,
+[data-theme='light'] {
+  --sonic-accent: #2f3bbf;
+  --sonic-accent-fg: #ffffff;
+}
+[data-theme='dark'] {
+  --sonic-accent: #8a92ff;
+  --sonic-accent-fg: #0b0d33;
+}
+
+:root {
+  --sonic-primary: var(--sonic-accent);
+  --sonic-primary-fg: var(--sonic-accent-fg);
+  --sonic-primary-hover: var(--sonic-accent-hover);
+  --sonic-accent-soft: color-mix(in oklab, var(--sonic-accent) 14%, transparent);
+  --sonic-accent-softer: color-mix(in oklab, var(--sonic-accent) 7%, transparent);
+  --sonic-accent-ring: color-mix(in oklab, var(--sonic-accent) 45%, transparent);
+  --sonic-accent-hover: color-mix(in oklab, var(--sonic-accent) 86%, black);
+  --sonic-accent-line: color-mix(in oklab, var(--sonic-accent) 40%, transparent);
+}
+
+[data-theme='dark'] {
+  --sonic-accent-hover: color-mix(in oklab, var(--sonic-accent) 84%, white);
+}
+
+/* ============================================================================
+   transitions.dev colour tokens, restated against the White Label palette.
+   ========================================================================= */
+
+:root,
+[data-theme='light'] {
+  --tabs-bar-bg: #e8e8e3;
+  --tabs-pill-bg: #fbfbf9;
+  --tabs-text-muted: #55554e;
+  --tabs-text-active: #151515;
+  --tt-bg: #151515;
+  --tt-fg: #f4f4f1;
+  --shimmer-base: #8a8a82;
+  --shimmer-highlight: #151515;
+}
+
+[data-theme='dark'] {
+  --tabs-bar-bg: #1a1a19;
+  --tabs-pill-bg: #2e2e2c;
+  --tabs-text-muted: #a8a8a0;
+  --tabs-text-active: #efefe9;
+  --tt-bg: #efefe9;
+  --tt-fg: #131313;
+  --shimmer-base: #6a6a64;
+  --shimmer-highlight: #efefe9;
+}
+
+
+/* ============================================================================
+   Tailwind theme bridge
+   ========================================================================= */
+
+@theme inline {
+  --color-bg: var(--sonic-bg);
+  --color-bg-deep: var(--sonic-bg-deep);
+  --color-surface: var(--sonic-surface);
+  --color-surface-2: var(--sonic-surface-2);
+  --color-surface-3: var(--sonic-surface-3);
+  --color-line: var(--sonic-border);
+  --color-line-strong: var(--sonic-border-strong);
+  --color-fg: var(--sonic-fg);
+  --color-fg-muted: var(--sonic-fg-muted);
+  --color-fg-subtle: var(--sonic-fg-subtle);
+  --color-overlay: var(--sonic-overlay);
+  --color-vinyl: var(--sonic-vinyl);
+  --color-label: var(--sonic-label);
+
+  --color-accent: var(--sonic-accent);
+  --color-accent-fg: var(--sonic-accent-fg);
+  --color-accent-soft: var(--sonic-accent-soft);
+  --color-accent-softer: var(--sonic-accent-softer);
+  --color-accent-line: var(--sonic-accent-line);
+  --color-primary: var(--sonic-primary);
+  --color-primary-fg: var(--sonic-primary-fg);
+
+  --color-cyan: var(--sonic-cyan);
+  --color-success: var(--sonic-success);
+  --color-warning: var(--sonic-warning);
+  --color-danger: var(--sonic-danger);
+
+  --font-sans: 'Archivo Variable', 'Archivo', 'Segoe UI Variable Text', system-ui, 'Segoe UI', sans-serif;
+  --font-marker: 'Shantell Sans Variable', 'Segoe Print', cursive;
+  --font-mono: 'Cascadia Code', 'JetBrains Mono', ui-monospace, Consolas, monospace;
+
+  /* Label stock is cut square; controls keep a 2px corner so they read as pressed card. */
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+  --radius-2xl: 4px;
+
+  --shadow-panel: var(--sonic-shadow-panel);
+  --shadow-pop: var(--sonic-shadow-pop);
+  --shadow-accent: none;
+}
+
+/* ============================================================================
+   Base
+   ========================================================================= */
+
+@layer base {
+  * {
+    border-color: var(--sonic-border);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--sonic-bg);
+    color: var(--sonic-fg);
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1.45;
+    font-stretch: 100%;
+    font-synthesis-weight: none;
+    font-variant-numeric: tabular-nums;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    /* The shell owns scrolling; the window itself never scrolls. */
+    overflow: hidden;
+    /* Desktop-app feel: text is not selectable unless it is content. */
+    user-select: none;
+    transition:
+      background-color var(--duration-fast) var(--ease-smooth-out),
+      color var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  input,
+  textarea,
+  [contenteditable='true'],
+  .selectable {
+    user-select: text;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--sonic-accent);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--sonic-accent);
+    color: var(--sonic-accent-fg);
+  }
+
+  ::-webkit-scrollbar {
+    width: 11px;
+    height: 11px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--sonic-border-strong);
+    background-clip: content-box;
+    border: 3px solid transparent;
+    border-radius: 0;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--sonic-fg-subtle);
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* Respect the OS setting, and the in-app override. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+[data-reduce-motion='true'] *,
+[data-reduce-motion='true'] *::before,
+[data-reduce-motion='true'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* ============================================================================
+   Composed surfaces
+   ========================================================================= */
+
+@layer components {
+  /* Window drag handle for the frameless title bar. */
+  .drag-region {
+    -webkit-app-region: drag;
+  }
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  .panel {
+    background-color: var(--sonic-surface);
+    border: 1px solid var(--sonic-border);
+  }
+
+  input, textarea, select { accent-color: var(--sonic-accent); }
+  input, textarea { caret-color: var(--sonic-accent); }
+
+  input[type='range'] {
+    appearance: none;
+    height: 20px;
+    background: transparent;
+    cursor: pointer;
+  }
+  input[type='range']::-webkit-slider-runnable-track {
+    height: 2px;
+    border-radius: 0;
+    background: var(--sonic-border-strong);
+  }
+  input[type='range']::-webkit-slider-thumb {
+    appearance: none;
+    width: 4px;
+    height: 14px;
+    margin-top: -6px;
+    border-radius: 1px;
+    background: var(--sonic-fg);
+  }
+  input[type='range']:hover::-webkit-slider-thumb { background: var(--sonic-accent); }
+  input[type='range']:disabled { cursor: default; opacity: 0.4; }
+
+  .workspace-page {
+    min-width: 0;
+    min-height: 0;
+    padding: 20px 28px;
+  }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+
+  .section-label {
+    color: var(--sonic-fg-subtle);
+    font-size: 12px;
+    line-height: 1.5;
+    letter-spacing: 0;
+    font-weight: 600;
+    text-transform: none;
+  }
+
+  /* Pressing-plant label lettering: condensed caps, set tight. */
+  .page-title {
+    color: var(--sonic-fg);
+    font-size: 28px;
+    line-height: 1.05;
+    font-stretch: 72%;
+    letter-spacing: 0.005em;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .label-type {
+    font-stretch: 72%;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .page-description {
+    margin-top: 6px;
+    color: var(--sonic-fg-subtle);
+    font-size: 13.5px;
+    line-height: 1.6;
+  }
+
+  .studio-panel {
+    background: transparent;
+  }
+
+  @media (max-width: 1199px), (max-height: 760px) {
+    .workspace-page { padding: 16px 18px; }
+    .page-title { font-size: 28px; }
+    .page-description { font-size: 12px; }
+  }
+
+  /* Legacy names: overlays are solid label stock, never frosted glass. */
+  .glass,
+  .glass-strong {
+    background-color: var(--sonic-surface);
+  }
+
+  /* Hairline highlight along the top edge of a raised surface. */
+  .sheen::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--sonic-sheen), transparent);
+    pointer-events: none;
+  }
+
+  .text-gradient {
+    color: var(--sonic-fg);
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ---- Provenance marks: how a tempo or key value arrived ----------------
+     printed  - read from the uploader's title, description or file name
+     stamped  - read back from the file's own embedded tag
+     measured - Sonic's audio estimate; dotted, never as solid as a statement
+     marker   - the producer's own correction; always wins                  */
+  .mark-printed,
+  .mark-stamped,
+  .mark-measured,
+  .mark-none {
+    font-stretch: 80%;
+  }
+  .mark-printed {
+    font-weight: 700;
+    color: var(--sonic-fg);
+  }
+  .mark-stamped {
+    display: inline-block;
+    padding: 0 4px;
+    border: 1.5px solid var(--sonic-accent);
+    color: var(--sonic-accent);
+    font-weight: 750;
+    line-height: 1.25;
+    transform: rotate(-1.5deg);
+  }
+  .mark-measured {
+    color: var(--sonic-fg-muted);
+    font-weight: 600;
+    text-decoration: underline dotted var(--sonic-fg-subtle);
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 3px;
+  }
+  /* Three ink dots: how much the measurement is worth, never a probability. */
+  .confidence-dots {
+    display: inline-flex;
+    gap: 2px;
+    margin-left: 3px;
+    vertical-align: 0.45em;
+  }
+  .confidence-dots > i {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    border: 1px solid var(--sonic-fg-subtle);
+  }
+  .confidence-dots > i[data-on] {
+    background: var(--sonic-fg-muted);
+    border-color: var(--sonic-fg-muted);
+  }
+  .mark-marker {
+    font-family: var(--font-marker);
+    font-weight: 750;
+    font-variation-settings: 'INFM' 100;
+    color: var(--sonic-fg);
+    letter-spacing: 0;
+    font-variant-numeric: normal;
+  }
+  .mark-none {
+    color: var(--sonic-fg-subtle);
+  }
+
+  /* Tabular figures keep live counters from jittering as digits change. */
+  .nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  /* Compact geometry for the sliding-tabs pill. The snippet's own geometry
+     token (height 30px / top 3px) stays the default. */
+  .t-tabs-sm .t-tab {
+    height: 26px;
+    padding: 2px 10px;
+  }
+  .t-tabs-sm .t-tabs-pill {
+    top: 3px;
+    height: 26px;
+  }
+}
+
+
+/* Indeterminate sweep for the progress bar. */
+@keyframes sonic-indeterminate {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+
+/* 33 1/3 rpm: one revolution every 1.8 seconds. */
+@keyframes sonic-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Slow drift used by the ambient background glows. */
+@keyframes sonic-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(2%, -3%, 0) scale(1.06);
+  }
+}
+
+
+/* Portaled controls retain the same tokens and a visible keyboard focus. */
+.t-tabs { border-radius: 2px; }
+.t-tab, .t-tabs-pill { border-radius: 2px; }
+#sonic-overlays button:focus-visible { outline: 2px solid var(--sonic-accent); outline-offset: 2px; }
+#sonic-overlays [inert] { pointer-events: none !important; }
+html[data-reduce-motion="true"] *, html[data-reduce-motion="true"] *::before, html[data-reduce-motion="true"] *::after { animation-duration: 0s !important; transition-duration: 0s !important; }

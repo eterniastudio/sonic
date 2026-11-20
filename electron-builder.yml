@@ -1,0 +1,52 @@
+# appId stays studio.sonic.v2 on purpose: Windows keys the installation by it,
+# so a Sonic installer upgrades an existing "Sonic V2" install in place.
+appId: studio.sonic.v2
+productName: Sonic
+copyright: Copyright © 2026 Eternia Studios
+
+directories:
+  buildResources: build
+  output: release
+
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+  - '!**/*.ts'
+
+asar: true
+compression: maximum
+
+extraResources:
+  - from: build/icon.png
+    to: icon.png
+
+# electron-updater reads app-update.yml (generated from this) and the
+# latest.yml attached to each GitHub Release.
+publish:
+  provider: github
+  owner: eterniastudio
+  repo: sonic
+  releaseType: release
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+  # No spaces: GitHub rewrites them in asset names, which breaks the update feed.
+  artifactName: Sonic-${version}-setup.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Sonic
+  uninstallDisplayName: Sonic
+
+extraMetadata:
+  main: out/main/index.js

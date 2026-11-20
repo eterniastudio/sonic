@@ -1,0 +1,155 @@
+name: Release
+
+# One Windows x64 installer for every push to main. Installed copies of Sonic
+# pick it up through electron-updater (latest.yml on the release).
+# scripts/release-version.mjs picks the version. The tag, the GitHub Release,
+# and package.json all use that same version.
+# Signing is optional. WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD sign the installer
+# when both are set. The build is published either way.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  windows:
+    if: "${{ !contains(github.event.head_commit.message || '', '[skip ci]') }}"
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Cache Electron tooling
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ${{ env.LOCALAPPDATA }}/electron/Cache
+            ${{ env.LOCALAPPDATA }}/electron-builder/Cache
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Resolve release version
+        id: version
+        run: node scripts/release-version.mjs
+
+      - name: Write version into package metadata
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version
+
+      - name: Build Windows installer
+        env:
+          SONIC_WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          SONIC_WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          export CSC_IDENTITY_AUTO_DISCOVERY=false
+          if [[ -n "${SONIC_WIN_CSC_LINK}" ]]; then
+            export CSC_LINK="${SONIC_WIN_CSC_LINK}"
+            export CSC_KEY_PASSWORD="${SONIC_WIN_CSC_KEY_PASSWORD}"
+          fi
+          npm run dist
+
+      - name: Tag the release
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          tag="v${version}"
+          mode="${{ steps.version.outputs.mode }}"
+          subject="${{ steps.version.outputs.subject }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [[ "${mode}" == "new" ]]; then
+            git add -- package.json package-lock.json
+            committed=false
+            if ! git diff --cached --quiet; then
+              git commit -m "${subject}"
+              committed=true
+            fi
+            git tag -a "${tag}" -m "Sonic ${version}"
+            git push origin "refs/tags/${tag}"
+            if [[ "${committed}" == "true" ]]; then
+              if ! git push origin HEAD:main; then
+                git fetch origin main
+                if [[ "$(git rev-parse HEAD^)" == "$(git rev-parse origin/main)" ]]; then
+                  echo "Could not push the version commit to main." >&2
+                  exit 1
+                fi
+                echo "main moved during this build. ${tag} stays on its tag; the newest push updates main."
+              fi
+            fi
+          fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          tag="v${version}"
+          notes="$(mktemp)"
+          {
+            echo "Windows 10/11 x64 installer for Sonic ${version}. Installed copies of Sonic 2.1 and later update themselves."
+            echo
+            echo "The installer is unsigned unless the repository secrets \`WIN_CSC_LINK\` and \`WIN_CSC_KEY_PASSWORD\` are set."
+            echo
+            echo "### Commits"
+            if prev="$(git describe --tags --abbrev=0 "${tag}^{commit}^" 2>/dev/null)"; then
+              git log --no-merges --invert-grep --grep='^chore: release ' --pretty=format:'- %s (%h)' "${prev}..${tag}"
+              echo
+            else
+              echo "- First tagged release."
+            fi
+          } > "${notes}"
+
+          files=()
+          while IFS= read -r -d '' file; do
+            files+=("${file}")
+          done < <(find release -maxdepth 1 -type f \( -name '*.exe' -o -name '*.exe.blockmap' -o -name 'latest.yml' \) -print0)
+          if [[ ! -f release/latest.yml ]]; then
+            echo "electron-builder did not produce release/latest.yml; installed copies could not update." >&2
+            exit 1
+          fi
+          if ! compgen -G 'release/*.exe' >/dev/null; then
+            echo "electron-builder did not produce an installer in release/." >&2
+            exit 1
+          fi
+
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" --clobber "${files[@]}"
+          else
+            gh release create "${tag}" \
+              --title "Sonic ${version}" \
+              --notes-file "${notes}" \
+              "${files[@]}"
+          fi
