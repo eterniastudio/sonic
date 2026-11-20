@@ -11,6 +11,11 @@ on:
   push:
     branches:
       - main
+    # Documentation-only pushes do not ship a new version to installed copies.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
 
 permissions:
   contents: write

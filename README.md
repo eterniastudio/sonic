@@ -51,18 +51,16 @@ The app version is the `version` field in [`package.json`](package.json) (also r
 
 The analyser, library performance work, and the White Label theme are written up in the [changelog](docs/CHANGELOG.md).
 
-## Your first track
-
 ## Screenshots
 
-The library and the download queue. The shipping theme is White Label: stamp-blue ink, square panels, and no accent picker.
+The library with a track playing and its details open, and the download queue with the metadata Sonic read from a video title. Sonic follows your choice of dark or light theme.
 
 <p align="center">
-  <img src="docs/assets/ui-overhaul/library-dark-1440.png" alt="Library table with playback and the track inspector" width="780" />
+  <img src="docs/assets/screenshots/library-dark.png" alt="Library table with a track playing and the details panel open, dark theme" width="820" />
 </p>
 
 <p align="center">
-  <img src="docs/assets/ui-overhaul/download-dark-1024.png" alt="Download queue and metadata inspector" width="640" />
+  <img src="docs/assets/screenshots/downloads-light.png" alt="Download queue with the metadata inspector showing producer, BPM, key and genre parsed from the title, light theme" width="820" />
 </p>
 
 ---
@@ -92,8 +90,6 @@ Paste a single-track link into the download box. Profiles, channels, and search 
 Only YouTube playlists and Bandcamp albums expand into a review. Every accepted site goes through the same export formats, metadata review, and audio analysis. YouTube artwork comes from the video thumbnail. Other sites use the thumbnail `yt-dlp` reports.
 
 Links from other sites are refused unless **Settings → Media engine → Allow other sites** is on. That setting passes any other public `https` page to `yt-dlp`'s generic extractor. Results vary by site. Direct-file and other-site links are not fetched when the host is your own computer or a private network, including shorthand loopback spellings. Cover downloads follow redirects and apply the same check. Public content on the sites above needs no cookies. If a site asks for a signed-in session, choose a browser under **Use cookies from a browser**.
-
-## Tempo and key you can inspect
 
 ## Installation
 
